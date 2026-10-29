@@ -1,0 +1,618 @@
+================================================================================
+           TWO-TIER LLM INFERENCE & SEMANTIC CACHING ARCHITECTURE
+                       COMPLETE PROJECT TECHNICAL SUMMARY
+================================================================================
+
+Date: October 2026
+Project Directory: c:\Users\shrim\OneDrive\Desktop\FEP
+Target Platform: Python 3.10+ / FastAPI / PyTorch / Transformers / Groq Cloud API
+
+
+TABLE OF CONTENTS
+--------------------------------------------------------------------------------
+ 1. Executive Summary & Core Purpose
+ 2. System Architecture & High-Level Design
+ 3. Evolutionary Development Phases (Phases 1 to 4)
+ 4. Root Production System Deep Dive (Stage E)
+    4.1. Tier 1: Exact Match Cache Engine
+    4.2. Tier 2: Dense Semantic Vector Embedding Cache Engine
+    4.3. Upstream Fallback: Groq Cloud LLM Inference Engine
+    4.4. Telemetry Logging & Observability Pipeline
+ 5. Complete File-by-File Codebase Directory
+ 6. HTTP API Endpoints & Request/Response Contracts
+ 7. Web Playground & Observability Dashboard (index.html)
+ 8. Evaluation, Benchmarking & Semantic Pooling Analysis
+ 9. Setup, Execution & Testing Guide
+
+
+================================================================================
+1. EXECUTIVE SUMMARY & CORE PURPOSE
+================================================================================
+
+Serving Large Language Models (LLMs) in production introduces major engineering
+challenges:
+  * High round-trip latency (often 500ms to 3000ms+ per inference call).
+  * High operational compute and cloud API token costs.
+  * Strict rate-limiting constraints on external LLM inference providers.
+  * Redundant generation when different users ask identical or semantically
+    equivalent questions (e.g., "What is the capital of France?" vs.
+    "Which city is France's capital?").
+
+This project solves these challenges by implementing an enterprise-grade,
+low-latency Two-Tier LLM Caching and Inference Engine paired with an interactive
+real-time web dashboard, evaluation suite, and benchmarking tools.
+
+KEY HIGHLIGHTS:
+  * Tier 1 (Exact Match Cache): Instant O(1) hash map lookup for identical
+    prompts, yielding sub-millisecond latency (0.0 ms model execution time).
+  * Tier 2 (Semantic Embedding Cache): Dense vector similarity matching using
+    a local sentence embedding model (all-MiniLM-L6-v2, 384 dimensions). It
+    intercepts paraphrased queries that meet or exceed a configurable cosine
+    similarity threshold (e.g., 0.90).
+  * Upstream LLM Fallback: When both cache tiers miss, queries are asynchronously
+    dispatched to Groq Cloud's ultra-fast LLM API (defaulting to
+    'qwen/qwen3.8-27b'). The newly generated output and its normalized embedding
+    are immediately indexed into the cache.
+  * Real-Time Observability: Full structured telemetry logging to JSONL format
+    capturing queue wait time, model execution time, total latency, token usage,
+    cache hit/miss status, similarity scores, and matched prompt keys.
+  * Full-Featured Web UI: A single-page application (index.html) featuring a
+    live interactive playground, cache inspector, live vector similarity viewer,
+    telemetry charts, and request drill-down modals.
+
+
+================================================================================
+2. SYSTEM ARCHITECTURE & HIGH-LEVEL DESIGN
+================================================================================
+
+Below is the end-to-end request lifecycle and decision flow:
+
+                         +-------------------------------+
+                         |   Client Request (Web / CLI)  |
+                         +---------------+---------------+
+                                         |
+                                         | HTTP POST /generate
+                                         v
+                         +-------------------------------+
+                         |       FastAPI Gateway         |
+                         |  - Assign Unique request_id   |
+                         |  - Record arrival_time        |
+                         +---------------+---------------+
+                                         |
+                            Is Tier 1 Cache Enabled?
+                                         |
+                        YES -------------+------------- NO
+                         |                              |
+                         v                              |
+            +--------------------------+                |
+            | Exact Match Lookup       |                |
+            | 1. (prompt, max_tokens)  |                |
+            | 2. exact prompt string   |                |
+            | 3. normalized prompt     |                |
+            +------------+-------------+                |
+                         |                              |
+                    Tier 1 Hit?                         |
+                         |                              |
+                YES -----+----- NO                      |
+                 |               |                      |
+                 |               v                      v
+                 |     Is Tier 2 Semantic Enabled & Cache Non-Empty?
+                 |               |
+                 |      YES -----+----- NO
+                 |       |               |
+                 |       v               |
+                 | +---------------------------+        |
+                 | | Compute Embedding         |        |
+                 | | (all-MiniLM-L6-v2)        |        |
+                 | | Mean-pooling + L2 norm    |        |
+                 | +-------------+-------------+        |
+                 |               v                      |
+                 | +---------------------------+        |
+                 | | Cosine Similarity Scan    |        |
+                 | | Dot Product >= Threshold  |        |
+                 | +-------------+-------------+        |
+                 |               |                      |
+                 |          Tier 2 Hit?                 |
+                 |               |                      |
+                 |      YES -----+----- NO              |
+                 |       |               |              |
+                 v       v               v              v
+           +--------------------+  +----------------------------+
+           | Return Cache Hit   |  | Full Cache Miss:           |
+           | - Exact: 1.0 Sim   |  | async_generate_llm()       |
+           | - Sem: Cosine Sim  |  | (Groq Cloud API Endpoint)  |
+           | - Proc Time: 0.0ms |  +-------------+--------------+
+           +---------+----------+                |
+                     |                           v
+                     |             +----------------------------+
+                     |             | TwoTierCache.insert()      |
+                     |             | Store text + embedding     |
+                     |             +-------------+--------------+
+                     |                           |
+                     v                           v
+           +----------------------------------------------------+
+           | _record_and_build_response()                       |
+           | 1. Append record to telemetry_metrics.jsonl        |
+           | 2. Format GenerateResponse schema                  |
+           | 3. Transmit JSON payload to client                 |
+           +----------------------------------------------------+
+
+
+================================================================================
+3. EVOLUTIONARY DEVELOPMENT PHASES (PHASES 1 TO 4)
+================================================================================
+
+The project reflects an evolutionary engineering progression, starting from a
+naive synchronous server and culminating in a production-ready cached system:
+
+--------------------------------------------------------------------------------
+PHASE 1: Stage A - Baseline Synchronous Inference Server
+--------------------------------------------------------------------------------
+Directory: Phase 1/
+Files:
+  * server_stage_a.py (FastAPI server, port 8000)
+  * test_stage_a.py (Automated smoke test)
+
+Core Mechanics:
+  * Loads Hugging Face 'gpt2' locally onto CPU.
+  * Every incoming HTTP request directly calls `model.generate()` synchronously
+    inside the route handler on the main event loop thread.
+  * Demonstrates the primary bottleneck: concurrency blocking. Multiple clients
+    experience serialization delays and head-of-line blocking.
+
+--------------------------------------------------------------------------------
+PHASE 2: Stage B - Asynchronous Request Queue & Background Worker
+--------------------------------------------------------------------------------
+Directory: Phase 2/
+Files:
+  * server_stage_b.py (FastAPI server with background worker)
+  * test_stage_b.py (Concurrency tests)
+
+Core Mechanics:
+  * Decouples HTTP request ingestion from heavy PyTorch execution.
+  * Uses `asyncio.Queue` to buffer incoming requests (`RequestItem`).
+  * Dedicated background worker task continuously pops requests and offloads
+    model execution to a thread pool via `loop.run_in_executor()`.
+  * Introduces futures (`asyncio.Future`) to resolve responses back to the
+    awaiting HTTP endpoint without blocking the server loop.
+
+--------------------------------------------------------------------------------
+PHASE 3: Stage C - Dynamic Batching with Window Timeout
+--------------------------------------------------------------------------------
+Directory: Phase 3/
+Files:
+  * server_stage_c.py (Batched inference server)
+  * test_stage_c.py (Batch throughput test)
+
+Core Mechanics:
+  * Accumulates multiple requests from the queue into batches up to
+    `MAX_BATCH_SIZE = 4` or until a deadline `BATCH_TIMEOUT = 0.2` seconds expires.
+  * Implements left-padding (`tokenizer.padding_side = "left"`) with attention
+    masks required for causal language models generating text simultaneously.
+  * Demonstrates higher overall token throughput (Tokens Per Second) under
+    heavy concurrent load.
+
+--------------------------------------------------------------------------------
+PHASE 4: Stage D - In-Memory Exact-Match Caching
+--------------------------------------------------------------------------------
+Directory: Phase 4/
+Files:
+  * server_stage_d.py (Batched server with exact caching)
+  * test_stage_d.py (Cache hit & eviction verification)
+
+Core Mechanics:
+  * Introduces an in-memory dictionary cache mapping `(normalized_prompt, max_tokens)`
+    to pre-generated text completions.
+  * Exact cache hits bypass the request queue and PyTorch inference entirely,
+    returning results instantaneously with 0 ms queue and compute time.
+  * Highlights the limitation of exact matching: slight variations in wording,
+    punctuation, or phrasing result in unnecessary cache misses.
+
+
+================================================================================
+4. ROOT PRODUCTION SYSTEM DEEP DIVE (STAGE E)
+================================================================================
+
+The root system represents the complete, integrated production application:
+  * File: server.py
+  * Default Port: 8004
+  * Model Backend: Groq Cloud API ('qwen/qwen3.8-27b')
+  * Local Semantic Engine: 'sentence-transformers/all-MiniLM-L6-v2'
+
+--------------------------------------------------------------------------------
+4.1. TIER 1: EXACT MATCH CACHE ENGINE
+--------------------------------------------------------------------------------
+The exact-match tier executes with O(1) time complexity. It utilizes a
+3-stage cascade lookup strategy to maximize hits while preserving token fidelity:
+
+1. Strict Match:
+   Direct key lookup on `(cleaned_prompt, max_new_tokens)`.
+2. Clean Prompt Match across Token Budgets:
+   Matches identical prompt strings even if `max_new_tokens` varies (prioritizing
+   the entry closest to the requested token length, then by most recent). This
+   ensures pre-warmed FAQ items hit immediately.
+3. Normalized Prompt Match:
+   Normalizes whitespace and converts text to lowercase. This catches case
+   variations and trailing spaces without invoking vector embeddings.
+
+TTL Expiration:
+  * Entries older than `cache_ttl` (default 3600s / 1 hour) are evicted lazily
+    during lookup and inspection cycles.
+
+--------------------------------------------------------------------------------
+4.2. TIER 2: DENSE SEMANTIC VECTOR EMBEDDING CACHE ENGINE
+--------------------------------------------------------------------------------
+When Tier 1 misses, Tier 2 evaluates semantic intent:
+
+1. Local Vector Representation:
+   Uses Hugging Face `transformers` running `sentence-transformers/all-MiniLM-L6-v2`.
+   The model computes contextual token embeddings locally on CPU in eval mode.
+2. Attention-Masked Mean Pooling:
+   Calculates the mean of all token vectors weighted by attention masks:
+     mean_pooled = sum(token_embeddings * attention_mask) / clamp(sum(mask))
+3. L2 Normalization:
+   Normalizes the 384-dimensional vector onto the unit hypersphere:
+     embedding = torch.nn.functional.normalize(mean_pooled, p=2, dim=1)
+4. Cosine Similarity via Dot Product:
+   Because vectors are L2-normalized, cosine similarity equals the dot product:
+     similarity = torch.dot(query_vector, cached_vector)
+5. Threshold Evaluation:
+   The candidate with the highest similarity score is evaluated against
+   `similarity_threshold` (default 0.90, adjustable from 0.50 to 1.00). If the
+   score meets or exceeds the threshold, the cached completion is returned.
+6. Golden FAQ Seeding:
+   Includes 8 built-in authoritative reference Q&As covering physics, chemistry,
+   computing, biology, geography, and Python programming. Can be pre-warmed via
+   `/api/seed_defaults` or custom datasets via `/api/seed_cache`.
+
+--------------------------------------------------------------------------------
+4.3. UPSTREAM FALLBACK: GROQ CLOUD LLM INFERENCE ENGINE
+--------------------------------------------------------------------------------
+When both Tier 1 and Tier 2 miss:
+  * The server makes an asynchronous HTTP POST request using `httpx.AsyncClient`
+    to `https://api.groq.com/openai/v1/chat/completions`.
+  * Authenticates via `GROQ_API_KEY` from `.env`.
+  * Generates high-speed completions using Groq's LPU architecture (typically
+    under 250-600ms).
+  * Automatically stores the new output, prompt token counts, completion token
+    counts, and computed prompt embedding into the `TwoTierCache`.
+
+--------------------------------------------------------------------------------
+4.4. TELEMETRY LOGGING & OBSERVABILITY PIPELINE
+--------------------------------------------------------------------------------
+Every processed request appends an immutable JSON record to
+`telemetry_metrics.jsonl`. Logged fields include:
+  * `request_id`: Unique identifier (e.g., "req-a1b2c3d4").
+  * `timestamp`: Human-readable local date-time string.
+  * `prompt`: Full prompt text submitted by client.
+  * `generated_text`: Complete generated text.
+  * `prompt_char_len`: String character length.
+  * `queue_time_ms`: Queue wait time (ms).
+  * `processing_time_ms`: Model execution duration (0.0 ms for cache hits).
+  * `total_latency_ms`: Total roundtrip time from server arrival to response.
+  * `cache_hit`: Boolean flag indicating if cache satisfied request.
+  * `match_type`: Match classification: "exact", "semantic", or "none".
+  * `similarity_score`: Float similarity score (for semantic matches).
+  * `matched_prompt`: The cached key prompt that triggered the hit.
+  * `prompt_tokens`, `generated_tokens`, `total_model_tokens`: Token metrics.
+  * `cache_enabled`, `semantic_cache_enabled`, `similarity_threshold`: Config flags.
+
+
+================================================================================
+5. COMPLETE FILE-BY-FILE CODEBASE DIRECTORY
+================================================================================
+
+Root Files:
+-----------
+1. server.py (31 KB, 812 lines):
+   The primary application server. Coordinates FastAPI routing, local embedding
+   model execution, two-tier cache management, Groq Cloud API calls, telemetry
+   writing, and single-page web UI serving.
+
+2. index.html (114 KB):
+   The complete single-page application (SPA). Features an interactive testing
+   playground, live cache inspector table, vector similarity neighbor search,
+   system telemetry HUD, and request inspection modals. Built with Tailwind CSS,
+   Google Geist fonts, and Material Symbols.
+
+3. evaluate_semantic_pooling.py (10 KB, 171 lines):
+   Rigorous evaluation suite that tests 22 curated prompt pairs (11 True
+   Paraphrases vs. 11 Lookalikes & Negative Distractors). Runs an automated
+   threshold sweep (0.80 to 0.98) and outputs precision, recall, accuracy, and
+   false-positive risk classifications to semantic_evaluation_results.json.
+
+4. benchmark.py (8 KB, 188 lines):
+   Benchmarking tool comparing system performance across three operational modes:
+     (1) No Cache (Cold LLM inference)
+     (2) Tier 1 Exact Match Cache
+     (3) Tier 2 Semantic Cache
+   Measures RPS, TPS, p50, p90, p99 latency, and hit rates, exporting findings
+   to benchmark_results.json.
+
+5. prompt_cli.py (8 KB, 209 lines):
+   Interactive terminal CLI supporting direct one-shot prompt queries, live
+   interactive shells, parameter tuning (threshold, tokens, cache toggle), and
+   cache inspection/clearing commands.
+
+6. run_semantic_prompts.py (6 KB, 152 lines):
+   Batch prompt execution utility. Reads prompt lines from a text file, sends
+   concurrent requests to the server, prints colored cache hit badges, and logs
+   summary metrics to semantic_prompt_results.json.
+
+7. test.py (6.5 KB, 163 lines):
+   Comprehensive end-to-end integration test suite. Automates 9 test scenarios:
+   health check, cold miss, exact hit, semantic hit, distinct query miss, TTL
+   auto-eviction, selective cache clearing, full cache wipe, and telemetry check.
+
+8. semantic_prompts.txt (248 bytes):
+   Default sample prompt text file used by run_semantic_prompts.py to showcase
+   semantic matching on paraphrased solar system questions.
+
+9. requirements.txt (128 bytes):
+   Lists core Python package dependencies: fastapi, uvicorn, httpx, pydantic,
+   python-dotenv, torch, and transformers.
+
+10. .env & .env.example:
+    Runtime configuration holding `GROQ_API_KEY` and `GROQ_MODEL_NAME`.
+
+11. telemetry_metrics.jsonl:
+    Append-only persistent log storing structured telemetry records for every
+    inference request.
+
+12. benchmark_results.json, semantic_evaluation_results.json, semantic_prompt_results.json:
+    Persistent JSON artifact stores consumed by the web UI dashboard.
+
+13. PROJECT_SUMMARY.md:
+    Markdown architectural documentation and diagrammatic sequence specification.
+
+Phased Progression Folders:
+---------------------------
+* Phase 1/
+  - server_stage_a.py: Naive synchronous CPU server with GPT-2.
+  - test_stage_a.py: Stage A functional test.
+* Phase 2/
+  - server_stage_b.py: Async queue + worker architecture with GPT-2.
+  - test_stage_b.py: Stage B concurrency test.
+* Phase 3/
+  - server_stage_c.py: Dynamic left-padded request batching with GPT-2.
+  - test_stage_c.py: Stage C batching verification.
+* Phase 4/
+  - server_stage_d.py: Batched execution with exact-match cache with GPT-2.
+  - test_stage_d.py: Stage D cache hit verification.
+
+
+================================================================================
+6. HTTP API ENDPOINTS & REQUEST/RESPONSE CONTRACTS
+================================================================================
+
+Core Service Endpoints:
+-----------------------
+* GET / or GET /playground
+  Serves index.html single-page application.
+
+* POST /generate
+  Query Parameters:
+    - enable_cache (bool, default true): Toggle Tier 1 cache.
+    - enable_semantic_cache (bool, default true): Toggle Tier 2 cache.
+    - similarity_threshold (float, default 0.90): Minimum cosine score for hit.
+    - cache_ttl (float, default 3600.0): Cache Time-To-Live in seconds.
+  Request Body:
+    { "prompt": "What is water made of?", "max_new_tokens": 30 }
+  Response:
+    {
+      "request_id": "req-9c4b12df",
+      "prompt": "What is water made of?",
+      "generated_text": "Water is composed of two hydrogen atoms...",
+      "queue_wait_time_ms": 0.0,
+      "processing_time_ms": 0.0,
+      "total_latency_ms": 3.45,
+      "batch_size": 0,
+      "cache_hit": true,
+      "match_type": "semantic",
+      "similarity_score": 0.9234,
+      "matched_prompt": "What is the chemical composition of water?",
+      "prompt_tokens": 6,
+      "generated_tokens": 28,
+      "total_model_tokens": 0
+    }
+
+* GET /api/status
+  Returns server health, stage descriptor, active LLM model, cache count, and TTL.
+
+* GET /api/cache_entries
+  Returns list of all active cache entries with prompts, max token budgets,
+  response previews, timestamps, and age in seconds.
+
+* POST /clear_cache
+  Query Parameter:
+    - prompt (optional string): If provided, evicts only that specific prompt.
+      If omitted, purges the entire cache.
+
+* POST /api/seed_defaults
+  Pre-warms the cache with 8 golden FAQ question-answer pairs.
+
+* POST /api/seed_cache
+  Accepts a custom list of `{ "prompt": "...", "response_text": "...", "max_new_tokens": 40 }`
+  objects to seed domain knowledge into the cache.
+
+* POST /api/vector_inspect
+  Calculates the query prompt embedding and performs k-Nearest-Neighbor (k-NN)
+  similarity search across all cached entries.
+  Request:
+    { "prompt": "water boiling temp", "top_k": 5, "similarity_threshold": 0.90 }
+  Returns neighbors ranked by similarity score with threshold pass/fail flags.
+
+* GET /api/logs
+  Query Parameter: `limit` (default 50). Returns recent telemetry log entries
+  in reverse chronological order.
+
+* GET /api/request/{request_id}
+  Retrieves the full telemetry record for a specific request ID.
+
+* GET /api/benchmark_results, GET /api/evaluation_results, GET /api/prompt_results
+  Returns saved JSON outputs from the benchmarking and evaluation scripts.
+
+
+================================================================================
+7. WEB PLAYGROUND & OBSERVABILITY DASHBOARD (index.html)
+================================================================================
+
+The web interface is a production-grade single-page application crafted with
+Tailwind CSS, Google Geist Sans/Mono typography, and Material Symbols icons.
+It provides complete operational visibility and control:
+
+1. Interactive Playground Tab:
+   - Full prompt composition input area with real-time character count.
+   - Quick paraphrase test chips (instant testing of true paraphrases vs. traps).
+   - Control parameters:
+     * max_tokens slider (1 to 100).
+     * Tier 1 exact match toggle.
+     * Tier 2 semantic cache toggle.
+     * Cosine similarity threshold slider (0.70 to 0.99) with live feedback.
+   - Output display box featuring a color-coded Transparency Banner:
+     * Emerald badge for Tier 1 Exact Hit.
+     * Indigo/Cyan badge for Tier 2 Semantic Hit (displaying similarity score
+       and matched key prompt).
+     * Amber/Violet badge for Cache Miss (indicating remote Groq inference).
+   - Real-time HUD metrics: Total latency (ms), Model processing time (ms),
+     Queue wait time (ms), Prompt tokens, and Generated tokens.
+
+2. Dashboard & Cache Inspector Tab:
+   - System health metrics bento displaying active model, cache capacity meter,
+     average latency, tokens/sec (TPS), and overall cache hit rate percentage.
+   - Active Cache Entries table showing prompt, preview, age, token budget, and
+     individual row eviction delete buttons.
+   - One-click "Seed Golden FAQs" button to populate reference questions.
+   - "Purge All" cache button for instant resetting.
+   - Live Telemetry Stream showing latest request events with status badges.
+
+3. Live Vector Similarity Inspector Tab:
+   - Live interactive cosine similarity analyzer.
+   - Type any query prompt to see how it vectors against every item in cache.
+   - Visual progress bars showing similarity percentage, exact match indicators,
+     and pass/fail threshold badges.
+
+4. Benchmarks & Semantic Evaluation Tabs:
+   - Interactive visual renders of benchmark_results.json comparing throughput,
+     latency percentiles (p50, p90, p99), and hit rates.
+   - Full evaluation table rendering semantic_evaluation_results.json showing
+     the threshold sweep matrix (Precision, Recall, Accuracy, False Positive Risk).
+
+5. Request Drill-Down Modal:
+   - Clicking any request ID opens an inspection drawer showing timestamps,
+     token statistics, latency breakdown, and raw JSON payload.
+   - Utility action buttons: "Open in Playground", "Copy JSON", and "Copy cURL".
+
+
+================================================================================
+8. EVALUATION, BENCHMARKING & SEMANTIC POOLING ANALYSIS
+================================================================================
+
+A key engineering contribution of this project is the empirical evaluation of
+semantic caching accuracy using sentence embeddings:
+
+--------------------------------------------------------------------------------
+Semantic Pooling Accuracy & False-Positive Traps
+--------------------------------------------------------------------------------
+Evaluation script: evaluate_semantic_pooling.py
+Evaluated against 22 curated test pairs:
+  * 11 True Paraphrases (e.g., "What is the capital of France?" vs.
+    "Which city is France's capital?") -> Ground Truth: POOL
+  * 11 Negative Distractors & Traps -> Ground Truth: REJECT:
+    - Entity Swaps ("capital of France" vs. "capital of Spain")
+    - Negation Traps ("Why is Python fast..." vs. "Why is Python NOT fast...")
+    - Directional Flips ("USD to EUR" vs. "EUR to USD")
+    - Action Verb Swaps ("train a model" vs. "save a model")
+    - Temporal Shifts ("World Cup in 2018" vs. "World Cup in 2022")
+    - Antonym Swaps ("ascending order" vs. "descending order")
+    - Domain Shifts ("Python programming" vs. "Python snake diet")
+    - Scale Shifts ("Generate 5 random..." vs. "Generate 500 random...")
+    - Role Reversals ("dog bites human" vs. "human bites dog")
+
+Threshold Sweep Results:
+  +-----------+----+----+----+----+-----------+--------+----------+-----------------------+
+  | Threshold | TP | FP | FN | TN | Precision | Recall | Accuracy | Risk Level            |
+  +-----------+----+----+----+----+-----------+--------+----------+-----------------------+
+  | 0.80      | 11 |  5 |  0 |  6 |    68.8%  | 100.0% |   77.3%  | CRITICAL (High FPs)   |
+  | 0.85      | 11 |  2 |  0 |  9 |    84.6%  | 100.0% |   90.9%  | HIGH (2 FPs)          |
+  | 0.90      | 10 |  0 |  1 | 11 |   100.0%  |  90.9% |   95.5%  | SAFE (Zero FPs)       |
+  | 0.92      |  8 |  0 |  3 | 11 |   100.0%  |  72.7% |   86.4%  | SAFE (Zero FPs)       |
+  | 0.95      |  3 |  0 |  8 | 11 |   100.0%  |  27.3% |   63.6%  | SAFE (Ultra-Strict)   |
+  +-----------+----+----+----+----+-----------+--------+----------+-----------------------+
+
+Key Engineering Finding:
+  * At threshold 0.80, the system exhibits severe false-positive errors (68.8%
+    precision), answering questions about Spain with answers about France.
+  * At threshold 0.90 to 0.92, the system achieves 100% Precision with ZERO
+    false positives while retaining 73-91% recall on true paraphrases.
+  * Therefore, 0.90 is selected as the default production threshold.
+
+--------------------------------------------------------------------------------
+Performance & Latency Acceleration
+--------------------------------------------------------------------------------
+Benchmarking script: benchmark.py
+Comparing cold LLM execution vs. cached execution:
+  * Full Cache Miss (Groq LLM): ~350ms - 1200ms total latency.
+  * Tier 2 Semantic Hit: ~3ms - 8ms total latency (98%+ latency reduction).
+  * Tier 1 Exact Hit: ~0.5ms - 2ms total latency (99.8%+ latency reduction).
+  * System throughput (RPS) scales exponentially when recurring or paraphrased
+    queries are intercepted by the in-memory cache.
+
+
+================================================================================
+9. SETUP, EXECUTION & TESTING GUIDE
+================================================================================
+
+Prerequisites:
+  * Python 3.10 or higher.
+  * Valid Groq API Key (obtained from https://console.groq.com).
+
+Step 1: Environment Setup
+  Open PowerShell or command line in the project folder:
+    cd c:\Users\shrim\OneDrive\Desktop\FEP
+    python -m venv .venv
+    .venv\Scripts\activate
+    pip install -r requirements.txt
+
+Step 2: Configure Environment Variables
+  Ensure `.env` contains your active Groq API Key:
+    GROQ_API_KEY=your_actual_groq_api_key_here
+    GROQ_MODEL_NAME=qwen/qwen3.8-27b
+
+Step 3: Start the Production Server
+  Run:
+    python server.py
+  The server starts on http://127.0.0.1:8004.
+  Open your web browser and navigate to:
+    http://127.0.0.1:8004/
+  This loads the complete single-page Web Playground & Dashboard.
+
+Step 4: Run End-to-End Automated Integration Tests
+  With the server running in another terminal:
+    python test.py
+  Executes all 9 automated test suites verifying exact hits, semantic hits,
+  evictions, and API contracts.
+
+Step 5: Run Semantic Accuracy Evaluation
+  Run:
+    python evaluate_semantic_pooling.py
+  Generates threshold sweep metrics and writes semantic_evaluation_results.json.
+
+Step 6: Run Performance Benchmark
+  Run:
+    python benchmark.py
+  Executes cold and warm workloads, computing RPS, TPS, and latency percentiles.
+
+Step 7: Interactive CLI Usage
+  Launch an interactive shell:
+    python prompt_cli.py --interactive
+  Or send a single prompt:
+    python prompt_cli.py --prompt "Explain photosynthesis"
+
+Step 8: Run Batch Prompts from File
+  Run:
+    python run_semantic_prompts.py --file semantic_prompts.txt --threshold 0.88
+
+================================================================================
+                                END OF SUMMARY
+================================================================================

@@ -1,0 +1,2096 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta content="width=device-width, initial-scale=1.0" name="viewport">
+  <title>Two-Tier LLM Cache Showcase - Groq Engine (Qwen 2.5 27B)</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+    rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "surface": "#fcf9f8",
+            "surface-container-highest": "#e5e2e1",
+            "secondary-fixed-dim": "#bdcbaf",
+            "sage-accent": "#7C8A71",
+            "on-tertiary": "#ffffff",
+            "charcoal-text": "#1A1A1A",
+            "surface-container-lowest": "#ffffff",
+            "error": "#ba1a1a",
+            "tertiary": "#8e4c41",
+            "secondary-fixed": "#d8e7ca",
+            "on-secondary-container": "#5b6851",
+            "outline": "#787770",
+            "surface-container-low": "#f6f3f2",
+            "on-tertiary-fixed": "#390b05",
+            "tertiary-container": "#ffefec",
+            "surface-tint": "#5f5e5b",
+            "tertiary-fixed": "#ffdad4",
+            "tertiary-fixed-dim": "#ffb4a7",
+            "surface-variant": "#e5e2e1",
+            "on-tertiary-fixed-variant": "#71352b",
+            "on-surface": "#1c1b1b",
+            "surface-container-high": "#eae7e7",
+            "on-primary-fixed": "#1c1c19",
+            "on-error-container": "#93000a",
+            "on-background": "#1c1b1b",
+            "background": "#fcf9f8",
+            "on-error": "#ffffff",
+            "on-secondary-fixed-variant": "#3e4a35",
+            "primary-fixed-dim": "#c9c6c2",
+            "inverse-primary": "#c9c6c2",
+            "inverse-on-surface": "#f3f0ef",
+            "terracotta-accent": "#B36A5E",
+            "surface-container": "#f0eded",
+            "surface-bright": "#fcf9f8",
+            "primary": "#5f5e5b",
+            "on-primary-container": "#6f6e6a",
+            "primary-fixed": "#e5e2dd",
+            "on-tertiary-container": "#a15b50",
+            "muted-stone": "#D1CDC7",
+            "on-primary-fixed-variant": "#474743",
+            "on-primary": "#ffffff",
+            "primary-container": "#f5f2ed",
+            "on-secondary": "#ffffff",
+            "inverse-surface": "#313030",
+            "secondary-container": "#d8e7ca",
+            "outline-variant": "#c8c7be",
+            "on-surface-variant": "#474741",
+            "surface-dim": "#dcd9d9",
+            "secondary": "#55624c",
+            "on-secondary-fixed": "#131f0d",
+            "cream-base": "#FDFCFB",
+            "error-container": "#ffdad6",
+            "warm-beige": "#F5F2ED"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "2xl": "1rem",
+            "3xl": "1.5rem",
+            "full": "9999px"
+          },
+          "fontFamily": {
+            "body-lg": ["Geist"],
+            "body-md": ["Geist"],
+            "display-lg": ["Geist"],
+            "label-md": ["Geist"],
+            "headline-lg-mobile": ["Geist"],
+            "label-sm": ["Geist"],
+            "headline-md": ["Geist"],
+            "headline-lg": ["Geist"],
+            "code-md": ["Geist"]
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .glass-panel {
+      background-color: rgba(246, 243, 242, 0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(120, 119, 112, 0.15);
+      box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.05);
+    }
+
+    .glow-hover:hover {
+      box-shadow: 0 4px 20px rgba(179, 106, 94, 0.25);
+    }
+
+    .hide-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+
+    .hide-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    .glow-primary {
+      box-shadow: 0 4px 14px rgba(124, 138, 113, 0.2);
+    }
+
+    .glow-secondary {
+      box-shadow: 0 4px 14px rgba(179, 106, 94, 0.2);
+    }
+
+    .view-section {
+      display: none;
+    }
+
+    .view-section.active {
+      display: flex;
+      flex-direction: column;
+    }
+  </style>
+</head>
+
+<body class="bg-background text-on-surface font-body-md flex flex-col min-h-screen pb-20 md:pb-0">
+
+  <!-- Top Mobile App Bar -->
+  <header
+    class="bg-surface/90 backdrop-blur-md flex justify-between items-center px-4 py-3 sticky top-0 z-50 w-full border-b border-outline-variant/50 transition-all duration-300 md:hidden relative">
+    <div class="flex-1 flex justify-start">
+      <div
+        class="w-10 h-10 rounded-lg bg-surface-container flex items-center justify-center text-charcoal-text border border-outline-variant">
+        <span class="material-symbols-outlined">bolt</span>
+      </div>
+    </div>
+    <h1
+      class="font-headline-lg-mobile text-headline-lg-mobile font-bold bg-gradient-to-r from-terracotta-accent to-sage-accent bg-clip-text text-transparent absolute left-1/2 -translate-x-1/2">
+      Bolt</h1>
+    <div class="flex-1 flex justify-end">
+      <button onclick="switchView('dashboard')"
+        class="text-on-surface hover:opacity-80 p-2 rounded-full hover:bg-surface-container transition-colors">
+        <span class="material-symbols-outlined">settings</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Wrapper with Desktop Sidebar -->
+  <div class="flex flex-1 overflow-hidden h-full">
+    <!-- Desktop Sidebar Navigation -->
+    <aside
+      class="hidden md:flex flex-col bg-surface/95 backdrop-blur-2xl border-r border-outline-variant/50 shadow-sm shadow-black/5 vertical left-0 h-full w-72 fixed left-0 top-0 z-[60] py-6 gap-2">
+      <div class="px-6 pb-4 mb-4 border-b border-outline-variant/30">
+        <h2 class="font-headline-md text-headline-md text-charcoal-text flex items-center gap-3">
+          <div
+            class="w-8 h-8 rounded-lg bg-surface-container-high flex items-center justify-center text-charcoal-text border border-outline-variant">
+            <span class="material-symbols-outlined text-sm">bolt</span>
+          </div>
+          Bolt AI
+        </h2>
+      </div>
+      <nav class="flex-1 flex flex-col gap-1.5 px-4">
+        <button id="nav-btn-playground" onclick="switchView('playground')"
+          class="w-full text-left px-4 py-3 rounded-xl flex items-center gap-3 font-body-md text-body-md transition-colors bg-secondary-container text-on-secondary-container font-semibold cursor-pointer">
+          <span class="material-symbols-outlined">terminal</span>
+          Live Playground
+        </button>
+        <button id="nav-btn-dashboard" onclick="switchView('dashboard')"
+          class="w-full text-left px-4 py-3 rounded-xl flex items-center gap-3 font-body-md text-body-md transition-colors text-on-surface-variant hover:bg-surface-container cursor-pointer">
+          <span class="material-symbols-outlined">analytics</span>
+          Dashboard & Savings
+        </button>
+        <button id="nav-btn-inspector" onclick="switchView('inspector')"
+          class="w-full text-left px-4 py-3 rounded-xl flex items-center gap-3 font-body-md text-body-md transition-colors text-on-surface-variant hover:bg-surface-container cursor-pointer">
+          <span class="material-symbols-outlined">hub</span>
+          Vector Inspector
+        </button>
+        <button id="nav-btn-seeder" onclick="switchView('seeder')"
+          class="w-full text-left px-4 py-3 rounded-xl flex items-center gap-3 font-body-md text-body-md transition-colors text-on-surface-variant hover:bg-surface-container cursor-pointer">
+          <span class="material-symbols-outlined">dataset</span>
+          Cache Pre-warmer
+        </button>
+      </nav>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 md:ml-72 p-4 md:p-6 lg:p-8 overflow-y-auto pb-24 md:pb-8 w-full max-w-container-max mx-auto">
+
+      <!-- VIEW 1: PLAYGROUND (Two-Tier Cache Showcase) -->
+      <div id="view-playground" class="view-section active w-full">
+        <div class="flex justify-between items-center mb-6">
+          <div>
+            <h1 class="font-headline-lg text-headline-lg text-charcoal-text font-bold">Two-Tier Cache Playground</h1>
+            <p class="font-body-md text-body-md text-on-surface-variant">Tier 1: Instant Exact Match | Tier 2: Semantic
+              Embedding Match with Cosine Similarity</p>
+          </div>
+          <span id="cache-entries-pill"
+            class="hidden sm:inline-flex items-center gap-2 bg-surface-container px-3.5 py-1.5 rounded-full border border-outline-variant/50 font-label-md text-label-sm text-charcoal-text">
+            Cache Entries: 0
+          </span>
+        </div>
+
+        <div class="flex flex-col gap-sm md:gap-lg md:grid md:grid-cols-2">
+          <!-- Input Section -->
+          <section class="glass-panel rounded-3xl p-5 flex flex-col gap-5">
+            <!-- Input Area -->
+            <div class="flex flex-col gap-2">
+              <div class="flex justify-between items-center">
+                <label id="input-label"
+                  class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider"
+                  for="prompt-input">Input Prompt</label>
+              </div>
+              <textarea id="prompt-input"
+                class="w-full bg-surface-container-lowest border border-outline-variant/40 rounded-2xl p-4 font-code-md text-code-md text-on-surface focus:border-sage-accent focus:ring-1 focus:ring-sage-accent focus:outline-none transition-colors"
+                placeholder="Enter your prompt... (Press Enter to generate, Shift+Enter for new line)"
+                rows="4"></textarea>
+
+              <!-- Quick Test Paraphrases -->
+              <div id="chips-container" class="flex flex-wrap gap-2 mt-2">
+                <span onclick="setPrompt('What is the boiling point of water at sea level?')"
+                  class="bg-secondary-fixed text-on-secondary-container border border-secondary-fixed-dim px-3 py-1 rounded-full font-label-md text-[11px] cursor-pointer hover:bg-secondary-container transition-colors">Original:
+                  Water Boiling Point</span>
+                <span onclick="setPrompt('At what temperature does water boil at sea level?')"
+                  class="bg-tertiary-container text-tertiary border border-tertiary-fixed-dim px-3 py-1 rounded-full font-label-md text-[11px] cursor-pointer hover:bg-tertiary-fixed transition-colors">Paraphrase
+                  (Tier 2 Test)</span>
+                <span onclick="setPrompt('Who wrote Romeo and Juliet?')"
+                  class="bg-surface-container text-on-surface-variant border border-outline-variant/30 px-3 py-1 rounded-full font-label-md text-[11px] cursor-pointer hover:bg-surface-container-high transition-colors">Different
+                  (Miss Test)</span>
+              </div>
+            </div>
+
+            <!-- Settings -->
+            <div class="flex flex-col gap-4 mt-2">
+              <!-- Max Tokens Slider -->
+              <div>
+                <div class="flex justify-between items-center mb-2">
+                  <label class="font-label-md text-label-md text-on-surface-variant" for="max-tokens">Max Tokens: <span
+                      class="text-charcoal-text font-semibold" id="token-val">20</span></label>
+                </div>
+                <input id="max-tokens"
+                  class="w-full h-2.5 bg-surface-container-highest rounded-full appearance-none cursor-pointer accent-terracotta-accent"
+                  max="100" min="1" type="range" value="20"
+                  oninput="document.getElementById('token-val').textContent = this.value">
+              </div>
+
+              <!-- Cache & Inference Options -->
+              <div>
+                <h3 class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-2">Two-Tier
+                  Cache & Inference Options</h3>
+                <div class="flex flex-col gap-2.5">
+                  <label
+                    class="flex justify-between items-center p-3 bg-surface-container-lowest rounded-2xl border border-outline-variant/30 cursor-pointer hover:border-outline-variant/50 transition-colors">
+                    <div>
+                      <span class="font-body-md text-body-md text-on-surface font-medium">Tier 1: Exact Match
+                        Cache</span>
+                      <span class="font-label-md text-[11px] text-on-surface-variant block mt-0.5">Checked first, zero
+                        inference overhead</span>
+                    </div>
+                    <div class="relative">
+                      <input id="toggle-cache" checked="" class="sr-only peer" type="checkbox">
+                      <div
+                        class="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sage-accent">
+                      </div>
+                    </div>
+                  </label>
+                  <label
+                    class="flex justify-between items-center p-3 bg-surface-container-lowest rounded-2xl border border-terracotta-accent/30 cursor-pointer hover:border-terracotta-accent/60 transition-colors">
+                    <div>
+                      <span class="font-body-md text-body-md text-on-surface flex items-center gap-1.5 font-medium">
+                        Tier 2: Semantic Cache <span
+                          class="bg-tertiary-container text-tertiary text-[10px] px-2 py-0.5 rounded-full font-bold uppercase">Cosine
+                          Match</span>
+                      </span>
+                      <span class="font-label-md text-[11px] text-on-surface-variant block mt-0.5">Runs on Tier 1 miss
+                        using stored embeddings</span>
+                    </div>
+                    <div class="relative">
+                      <input id="toggle-semantic" checked="" class="sr-only peer" type="checkbox"
+                        onchange="document.getElementById('sim-thresh-container').style.display = this.checked ? 'block' : 'none'">
+                      <div
+                        class="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-terracotta-accent">
+                      </div>
+                    </div>
+                  </label>
+                  <div id="sim-thresh-container"
+                    class="p-3 bg-tertiary-container/20 rounded-2xl border border-terracotta-accent/20">
+                    <div class="flex justify-between items-center mb-1.5">
+                      <span class="font-label-md text-[12px] text-on-surface-variant font-medium">Similarity Threshold:
+                        <strong id="thresh-val" class="text-tertiary font-mono">0.90</strong></span>
+                      <span class="text-[10px] text-on-surface-variant uppercase font-semibold">(Configurable)</span>
+                    </div>
+                    <input id="sim-threshold" type="range" min="0.70" max="0.99" step="0.01" value="0.90"
+                      class="w-full h-2 bg-surface-container-highest rounded-full appearance-none cursor-pointer accent-terracotta-accent"
+                      oninput="document.getElementById('thresh-val').innerText = parseFloat(this.value).toFixed(2)">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- CTA -->
+            <div class="flex gap-2.5 mt-2">
+              <button id="btn-generate" onclick="runGeneration()"
+                class="flex-1 py-3.5 px-6 rounded-full bg-charcoal-text text-white font-headline-md text-[16px] font-bold glow-hover transition-all active:scale-95 hover:bg-terracotta-accent flex items-center justify-center gap-2 cursor-pointer">
+                <span id="btn-text">Generate Output</span>
+              </button>
+              <button type="button" onclick="inspectPlaygroundPrompt()"
+                class="px-4 py-3.5 rounded-full bg-surface-container hover:bg-surface-container-high border border-outline-variant/40 text-charcoal-text font-medium text-xs flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+                title="Inspect Top 5 Nearest Cached Vectors for this Prompt">
+                <span class="material-symbols-outlined text-[18px] text-sage-accent">hub</span>
+                <span class="hidden sm:inline">Inspect Vectors</span>
+              </button>
+            </div>
+          </section>
+
+          <!-- Output Section -->
+          <section class="flex flex-col gap-sm">
+            <!-- Output Box -->
+            <div class="glass-panel rounded-3xl p-5 flex flex-col gap-4 min-h-[250px]">
+              <div class="flex justify-between items-center">
+                <div class="flex items-center gap-2.5">
+                  <h2 class="font-headline-md text-[18px] font-semibold text-charcoal-text">Generated Completion</h2>
+                  <button id="output-req-badge" onclick="inspectCurrentOutputRequest()" style="display: none;"
+                    class="font-mono text-xs px-2.5 py-1 rounded-full bg-surface-container hover:bg-surface-container-high text-charcoal-text hover:text-terracotta-accent border border-outline-variant/40 flex items-center gap-1 transition-colors cursor-pointer"
+                    title="Click to inspect this request in detail">
+                    <span class="material-symbols-outlined text-[12px] text-sage-accent">tag</span>
+                    <span id="output-req-id">req-00000000</span>
+                    <span class="material-symbols-outlined text-[13px] opacity-50">visibility</span>
+                  </button>
+                </div>
+                <span id="cache-badge"
+                  class="bg-surface-container-highest text-on-surface-variant border border-outline-variant px-2.5 py-1 rounded-full font-label-md text-[10px] uppercase tracking-wider font-semibold">Ready</span>
+              </div>
+
+              <!-- Transparency Banner -->
+              <div id="transparency-banner" style="display: none;" class="p-3 rounded-2xl border text-xs font-medium">
+                <div class="flex items-center gap-1.5 font-semibold mb-1" id="transparency-title"></div>
+                <div class="text-on-surface-variant font-mono" id="transparency-details"></div>
+                <div id="transparency-savings" class="mt-2 pt-2 border-t border-outline-variant/30 text-sage-accent font-semibold flex items-center gap-1.5 text-[11px]" style="display: none;"></div>
+              </div>
+
+              <div
+                class="flex-1 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl p-4 relative group">
+                <button onclick="copyOutput()"
+                  class="absolute top-3 right-3 bg-surface-container text-on-surface-variant hover:text-charcoal-text px-2.5 py-1.5 rounded-lg font-label-md text-[11px] opacity-20 group-hover:opacity-100 transition-opacity flex items-center gap-1 border border-outline-variant/30">
+                  <span aria-hidden="true" class="material-symbols-outlined text-[14px]">content_copy</span> Copy
+                </button>
+                <p id="output-text"
+                  class="font-code-md text-code-md text-on-surface leading-relaxed whitespace-pre-wrap">Submit a prompt
+                  to view live model generation and Two-Tier Cache transparency details...</p>
+              </div>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="flex gap-3 overflow-x-auto pb-2 hide-scrollbar snap-x">
+              <div
+                class="snap-start shrink-0 w-32 bg-surface-container-lowest border border-outline-variant/20 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-sm">
+                <span id="stat-latency"
+                  class="font-headline-lg text-headline-lg-mobile font-bold text-charcoal-text">0<span
+                    class="text-sm font-normal text-on-surface-variant ml-0.5">ms</span></span>
+                <span class="font-label-md text-[11px] text-on-surface-variant uppercase tracking-wider mt-1.5">Total
+                  Latency</span>
+              </div>
+              <div
+                class="snap-start shrink-0 w-32 bg-surface-container-lowest border border-outline-variant/20 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-sm">
+                <span id="stat-compute"
+                  class="font-headline-lg text-headline-lg-mobile font-bold text-charcoal-text">0<span
+                    class="text-sm font-normal text-on-surface-variant ml-0.5">ms</span></span>
+                <span class="font-label-md text-[11px] text-on-surface-variant uppercase tracking-wider mt-1.5">Model
+                  Compute</span>
+              </div>
+              <div
+                class="snap-start shrink-0 w-28 bg-surface-container-lowest border border-outline-variant/20 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-sm">
+                <span id="stat-queue"
+                  class="font-headline-lg text-headline-lg-mobile font-bold text-charcoal-text">0<span
+                    class="text-sm font-normal text-on-surface-variant ml-0.5">ms</span></span>
+                <span
+                  class="font-label-md text-[11px] text-on-surface-variant uppercase tracking-wider mt-1.5">Queue</span>
+              </div>
+              <div
+                class="snap-start shrink-0 w-24 bg-surface-container-lowest border border-outline-variant/20 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-sm">
+                <span id="stat-prompt-toks"
+                  class="font-headline-lg text-headline-lg-mobile font-bold text-charcoal-text">0</span>
+                <span
+                  class="font-label-md text-[11px] text-on-surface-variant uppercase tracking-wider mt-1.5">Prompt</span>
+              </div>
+              <div
+                class="snap-start shrink-0 w-24 bg-surface-container-lowest border border-outline-variant/20 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-sm">
+                <span id="stat-gen-toks"
+                  class="font-headline-lg text-headline-lg-mobile font-bold text-charcoal-text">0</span>
+                <span
+                  class="font-label-md text-[11px] text-on-surface-variant uppercase tracking-wider mt-1.5">Gen</span>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <!-- VIEW 2: HOME DASHBOARD / TELEMETRY & CACHE INSPECTOR -->
+      <div id="view-dashboard" class="view-section w-full">
+        <div class="hidden md:flex justify-between items-end mb-8 border-b border-outline-variant/30 pb-4">
+          <div>
+            <h1 class="font-display-lg text-display-lg text-charcoal-text mb-2">Cache Inspector & Dashboard</h1>
+            <p class="font-body-md text-body-md text-on-surface-variant">Real-time telemetry, cached prompt inspection,
+              and eviction controls.
+            </p>
+          </div>
+          <div class="flex items-center gap-3">
+            <button onclick="switchView('seeder')"
+              class="bg-secondary-container hover:bg-secondary-fixed text-on-secondary-container px-4 py-2 rounded-full border border-secondary-fixed-dim font-label-md text-label-md font-semibold transition-colors flex items-center gap-1.5 cursor-pointer">
+              <span class="material-symbols-outlined text-sm">dataset</span> Pre-warm Cache
+            </button>
+            <button onclick="clearCacheAction()"
+              class="bg-surface-container hover:bg-surface-container-high px-4 py-2 rounded-full border border-outline-variant/50 font-label-md text-label-md text-charcoal-text transition-colors cursor-pointer">
+              Clear Entire Cache
+            </button>
+            <div
+              class="flex items-center gap-2 bg-surface-container px-4 py-2 rounded-full border border-outline-variant/50">
+              <div class="w-2.5 h-2.5 rounded-full bg-sage-accent animate-pulse"></div>
+              <span class="font-label-md text-label-md text-charcoal-text uppercase tracking-wider">System Online</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cost & Carbon Savings Widget -->
+        <div class="glass-panel rounded-2xl p-6 border border-sage-accent/30 bg-gradient-to-br from-surface-container-lowest via-surface-container-low to-secondary-container/20 relative overflow-hidden mb-8 shadow-sm">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-outline-variant/30">
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wider bg-secondary-container text-on-secondary-container border border-secondary-fixed-dim">
+                  <span class="w-2 h-2 rounded-full bg-sage-accent animate-pulse"></span>
+                  Financial & Sustainability Impact
+                </span>
+                <span class="text-xs text-on-surface-variant font-medium">Live Enterprise Cache ROI</span>
+              </div>
+              <h2 id="savings-hero-counter" class="font-display-lg text-2xl md:text-3xl font-bold text-charcoal-text">
+                Total Saved: <span class="text-sage-accent">$0.00</span> | <span class="text-terracotta-accent">0</span> tokens avoided
+              </h2>
+            </div>
+
+            <!-- Provider Rate Switcher -->
+            <div class="flex items-center gap-2.5 bg-surface-container px-3.5 py-2 rounded-xl border border-outline-variant/40 text-xs">
+              <label for="provider-rate-select" class="font-medium text-on-surface-variant shrink-0">Pricing Rate:</label>
+              <select id="provider-rate-select" onchange="updateSavingsWidget()" class="bg-surface-container-lowest border border-outline-variant/40 rounded-xl pl-3 pr-8 py-1.5 text-xs text-charcoal-text font-medium focus:ring-1 focus:ring-sage-accent focus:outline-none cursor-pointer">
+                <option value="0.0008" selected>Groq (Qwen 2.5 27B) - $0.80 / 1M</option>
+                <option value="0.0050">OpenAI (GPT-4o) - $5.00 / 1M</option>
+                <option value="0.0003">OpenAI (GPT-4o-mini) - $0.30 / 1M</option>
+                <option value="0.0030">Anthropic (Claude 3.5) - $3.00 / 1M</option>
+                <option value="0.0009">Meta (Llama 3 70B) - $0.90 / 1M</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Savings Bento Grid -->
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+            <div class="bg-surface-container-lowest/80 rounded-xl p-4 border border-outline-variant/30 flex flex-col justify-between">
+              <span class="text-[11px] font-semibold text-on-surface-variant uppercase tracking-wider flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-sage-accent text-sm">savings</span> Total Capital Saved
+              </span>
+              <div id="stat-saved-dollars" class="text-2xl font-bold text-charcoal-text mt-2">$0.00</div>
+              <span class="text-[10px] text-on-surface-variant mt-1" id="stat-saved-dollars-sub">0 cache hits avoided upstream API</span>
+            </div>
+
+            <div class="bg-surface-container-lowest/80 rounded-xl p-4 border border-outline-variant/30 flex flex-col justify-between">
+              <span class="text-[11px] font-semibold text-on-surface-variant uppercase tracking-wider flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-terracotta-accent text-sm">token</span> Tokens Avoided
+              </span>
+              <div id="stat-saved-tokens" class="text-2xl font-bold text-charcoal-text mt-2">0</div>
+              <span class="text-[10px] text-on-surface-variant mt-1" id="stat-saved-tokens-breakdown">0 prompt • 0 generated</span>
+            </div>
+
+            <div class="bg-surface-container-lowest/80 rounded-xl p-4 border border-outline-variant/30 flex flex-col justify-between">
+              <span class="text-[11px] font-semibold text-on-surface-variant uppercase tracking-wider flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-sage-accent text-sm">eco</span> Carbon Avoided
+              </span>
+              <div id="stat-saved-carbon" class="text-2xl font-bold text-charcoal-text mt-2">0.00g</div>
+              <span class="text-[10px] text-on-surface-variant mt-1">~0.12g CO₂e avoided per 1K tokens</span>
+            </div>
+
+            <div class="bg-surface-container-lowest/80 rounded-xl p-4 border border-outline-variant/30 flex flex-col justify-between">
+              <span class="text-[11px] font-semibold text-on-surface-variant uppercase tracking-wider flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-outline text-sm">timer</span> Wait Time Saved
+              </span>
+              <div id="stat-saved-time" class="text-2xl font-bold text-charcoal-text mt-2">0.0s</div>
+              <span class="text-[10px] text-on-surface-variant mt-1">Instant 0ms retrieval on cache hits</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
+          <!-- Left Column: Status & Cache Entries List -->
+          <div class="lg:col-span-5 flex flex-col gap-6">
+            <!-- System Status Card -->
+            <div class="glass-panel rounded-xl p-6 relative overflow-hidden group">
+              <div class="flex justify-between items-start mb-6">
+                <h3 class="font-headline-md text-headline-md text-charcoal-text">System Status</h3>
+                <span class="material-symbols-outlined text-outline">dns</span>
+              </div>
+              <div class="space-y-6">
+                <div>
+                  <div class="flex justify-between mb-2">
+                    <span class="font-label-md text-label-md text-on-surface-variant">TWO-TIER CACHE STORE</span>
+                    <span id="dash-cache-val" class="font-label-md text-label-md text-terracotta-accent font-semibold">0
+                      Entries</span>
+                  </div>
+                  <div
+                    class="w-full bg-surface-container h-2.5 rounded-full overflow-hidden border border-outline-variant/20">
+                    <div id="dash-cache-bar" class="h-full bg-terracotta-accent w-[10%] rounded-full"></div>
+                  </div>
+                </div>
+                <div class="bg-surface-container-low rounded-lg p-4 border border-outline-variant mt-4">
+                  <span class="font-label-md text-label-md text-on-surface-variant block mb-1">ACTIVE RUNTIME</span>
+                  <div class="flex items-center gap-3">
+                    <div
+                      class="w-10 h-10 rounded bg-secondary-container flex items-center justify-center text-on-secondary-container">
+                      <span class="material-symbols-outlined text-lg">cloud_done</span>
+                    </div>
+                    <div>
+                      <div id="runtime-model-name" class="font-body-md text-body-md font-semibold text-charcoal-text">
+                        Qwen 2.5 27B (Groq)</div>
+                      <div class="font-label-md text-label-md text-outline">Tier 1: Exact Match • Tier 2: Semantic Match
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Live Cache Entries Table -->
+            <div class="glass-panel rounded-xl p-6 flex flex-col gap-4">
+              <div class="flex justify-between items-center">
+                <h3 class="font-headline-md text-[18px] text-charcoal-text flex items-center gap-2">
+                  <span class="material-symbols-outlined text-outline">database</span>
+                  Active Cache Entries
+                </h3>
+                <button onclick="loadCacheEntries()" class="text-sage-accent text-xs font-semibold hover:underline">
+                  Refresh
+                </button>
+              </div>
+              <div class="max-h-80 overflow-y-auto">
+                <table class="w-full text-left text-xs border-collapse">
+                  <thead class="bg-surface-container-low sticky top-0">
+                    <tr>
+                      <th class="p-2 border-b border-outline-variant font-medium">Cached Prompt</th>
+                      <th class="p-2 border-b border-outline-variant font-medium">Age</th>
+                      <th class="p-2 border-b border-outline-variant text-right">Evict</th>
+                    </tr>
+                  </thead>
+                  <tbody id="cache-entries-body" class="divide-y divide-outline-variant/30">
+                    <tr>
+                      <td colspan="3" class="p-4 text-center text-outline">No cache entries stored yet.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Column: Telemetry Logs -->
+          <div class="lg:col-span-7 flex flex-col gap-6">
+            <!-- Metrics Bento -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div class="glass-panel p-6 rounded-xl relative overflow-hidden">
+                <span
+                  class="font-label-md text-label-md text-on-surface-variant block mb-2 uppercase tracking-wider">Avg
+                  Latency</span>
+                <div id="dash-avg-lat" class="font-display-lg text-display-lg text-charcoal-text">0ms</div>
+                <div class="absolute -bottom-4 -right-4 opacity-5 text-charcoal-text">
+                  <span class="material-symbols-outlined" style="font-size: 80px;">speed</span>
+                </div>
+              </div>
+              <div class="glass-panel p-6 rounded-xl relative overflow-hidden">
+                <span
+                  class="font-label-md text-label-md text-on-surface-variant block mb-2 uppercase tracking-wider">Tokens
+                  / Sec</span>
+                <div id="dash-tps" class="font-display-lg text-display-lg text-charcoal-text">0.0</div>
+                <div class="absolute -bottom-4 -right-4 opacity-5 text-charcoal-text">
+                  <span class="material-symbols-outlined" style="font-size: 80px;">bolt</span>
+                </div>
+              </div>
+              <div class="glass-panel p-6 rounded-xl relative overflow-hidden">
+                <span
+                  class="font-label-md text-label-md text-on-surface-variant block mb-2 uppercase tracking-wider">Cache
+                  Hit Rate</span>
+                <div id="dash-hit-rate" class="font-display-lg text-display-lg text-charcoal-text">0%</div>
+                <div class="absolute -bottom-4 -right-4 opacity-5 text-charcoal-text">
+                  <span class="material-symbols-outlined" style="font-size: 80px;">database</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Recent Queries Feed -->
+            <div class="glass-panel rounded-xl flex-1 flex flex-col overflow-hidden">
+              <div
+                class="p-6 border-b border-outline-variant flex justify-between items-center bg-surface-container-lowest">
+                <h3 class="font-headline-md text-headline-md text-charcoal-text flex items-center gap-2">
+                  <span class="material-symbols-outlined text-outline">history</span>
+                  Recent Telemetry Logs
+                </h3>
+                <button onclick="loadDashboardData()"
+                  class="text-sage-accent font-label-md text-label-md hover:underline font-semibold flex items-center gap-1">
+                  <span class="material-symbols-outlined text-sm">refresh</span> Refresh
+                </button>
+              </div>
+              <div class="flex-1 overflow-y-auto p-0 max-h-96">
+                <table class="w-full text-left border-collapse">
+                  <thead class="bg-surface-container-low sticky top-0 z-10">
+                    <tr>
+                      <th
+                        class="p-4 font-label-md text-label-md text-on-surface-variant font-medium border-b border-outline-variant">
+                        Req ID</th>
+                      <th
+                        class="p-4 font-label-md text-label-md text-on-surface-variant font-medium border-b border-outline-variant">
+                        Latency</th>
+                      <th
+                        class="p-4 font-label-md text-label-md text-on-surface-variant font-medium border-b border-outline-variant">
+                        Tokens (P/G)</th>
+                      <th
+                        class="p-4 font-label-md text-label-md text-on-surface-variant font-medium border-b border-outline-variant text-right">
+                        Match Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="dash-table-body" class="font-label-md text-label-md divide-y divide-outline-variant/30">
+                    <tr>
+                      <td colspan="4" class="p-4 text-center text-outline">Loading telemetry...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW 3: LIVE VECTOR SIMILARITY INSPECTOR -->
+      <div id="view-inspector" class="view-section w-full">
+        <div class="hidden md:flex justify-between items-end mb-8 border-b border-outline-variant/30 pb-4">
+          <div>
+            <h1 class="font-display-lg text-display-lg text-charcoal-text mb-2 flex items-center gap-2.5">
+              <span class="material-symbols-outlined text-sage-accent text-3xl">hub</span>
+              Live Vector Similarity Inspector
+            </h1>
+            <p class="font-body-md text-body-md text-on-surface-variant">
+              Inspect dense cosine vector distances against active cache embeddings with real-time similarity metrics.
+            </p>
+          </div>
+          <div class="flex items-center gap-3">
+            <button onclick="loadDefaultGoldenFaqs()"
+              class="bg-secondary-container hover:bg-secondary-fixed text-on-secondary-container px-4 py-2 rounded-full border border-secondary-fixed-dim font-label-md text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer">
+              <span class="material-symbols-outlined text-sm">bolt</span> Pre-warm Golden FAQs
+            </button>
+            <button onclick="switchView('seeder')"
+              class="bg-surface-container hover:bg-surface-container-high text-charcoal-text px-4 py-2 rounded-full border border-outline-variant/50 font-label-md text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer">
+              <span class="material-symbols-outlined text-sm">upload_file</span> Custom Seed File
+            </button>
+          </div>
+        </div>
+
+        <!-- Query Bar & Interactive Controls -->
+        <div class="glass-panel rounded-2xl p-6 mb-6 flex flex-col gap-4 border border-outline-variant/30">
+          <div class="flex flex-col gap-2">
+            <label class="font-label-md text-xs uppercase tracking-wider text-on-surface-variant font-semibold" for="inspector-query-input">
+              Query Vector Probe
+            </label>
+            <div class="flex flex-col sm:flex-row gap-3">
+              <input id="inspector-query-input" type="text"
+                class="flex-1 bg-surface-container-lowest border border-outline-variant/40 rounded-xl px-4 py-3 text-sm text-on-surface focus:border-sage-accent focus:ring-1 focus:ring-sage-accent focus:outline-none"
+                placeholder="Enter query to probe vector space (e.g., 'what is an llm', 'temp of boiling water', 'diff b/w ram and rom')..."
+                onkeydown="if(event.key === 'Enter'){ event.preventDefault(); runVectorInspection(); }">
+              <button id="inspector-btn" onclick="runVectorInspection()"
+                class="px-6 py-3 rounded-xl bg-charcoal-text hover:bg-terracotta-accent text-white text-sm font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shrink-0 shadow-sm">
+                <span class="material-symbols-outlined text-sm">travel_explore</span>
+                <span id="inspector-btn-text">Inspect Vectors</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Quick Test Chips -->
+          <div class="flex items-center gap-2 flex-wrap text-xs">
+            <span class="text-on-surface-variant font-semibold">Test Short Forms:</span>
+            <button onclick="setInspectorQuery('what is an llm')" class="px-2.5 py-1 rounded-full bg-surface-container hover:bg-surface-container-high border border-outline-variant/40 text-charcoal-text transition-colors cursor-pointer">"what is an llm"</button>
+            <button onclick="setInspectorQuery('tell me diff b/w ram and rom')" class="px-2.5 py-1 rounded-full bg-surface-container hover:bg-surface-container-high border border-outline-variant/40 text-charcoal-text transition-colors cursor-pointer">"diff b/w ram and rom"</button>
+            <button onclick="setInspectorQuery('temp of boiling water')" class="px-2.5 py-1 rounded-full bg-surface-container hover:bg-surface-container-high border border-outline-variant/40 text-charcoal-text transition-colors cursor-pointer">"temp of boiling water"</button>
+            <button onclick="setInspectorQuery('how to reverse list in python')" class="px-2.5 py-1 rounded-full bg-surface-container hover:bg-surface-container-high border border-outline-variant/40 text-charcoal-text transition-colors cursor-pointer">"reverse list in python"</button>
+            <button onclick="setInspectorQuery('how far is moon')" class="px-2.5 py-1 rounded-full bg-surface-container hover:bg-surface-container-high border border-outline-variant/40 text-charcoal-text transition-colors cursor-pointer">"how far is moon"</button>
+          </div>
+
+          <!-- Controls Bar -->
+          <div class="flex flex-wrap items-center justify-between gap-4 pt-3 border-t border-outline-variant/20 text-xs">
+            <div class="flex flex-wrap items-center gap-5">
+              <div class="flex items-center gap-2">
+                <span class="text-on-surface-variant font-medium">Nearest Neighbors:</span>
+                <select id="inspector-top-k" onchange="runVectorInspection()"
+                  class="bg-surface-container-lowest border border-outline-variant/40 rounded-xl pl-3 pr-8 py-1.5 text-xs text-charcoal-text font-semibold cursor-pointer min-w-[105px] focus:ring-1 focus:ring-sage-accent focus:outline-none shadow-xs transition-all">
+                  <option value="3">Top 3</option>
+                  <option value="5" selected>Top 5</option>
+                  <option value="8">Top 8</option>
+                  <option value="10">Top 10</option>
+                </select>
+              </div>
+              <div class="flex items-center gap-2.5">
+                <span class="text-on-surface-variant font-medium">Match Threshold:</span>
+                <span id="inspector-thresh-val" class="font-mono font-bold text-tertiary">0.90</span>
+                <input id="inspector-thresh-slider" type="range" min="0.70" max="0.99" step="0.01" value="0.90"
+                  oninput="document.getElementById('inspector-thresh-val').innerText = parseFloat(this.value).toFixed(2); runVectorInspection();"
+                  class="w-28 accent-sage-accent cursor-pointer">
+              </div>
+            </div>
+            <div id="inspector-cache-stats" class="text-on-surface-variant font-mono text-xs">
+              Probe target: In-Memory Sentence Embeddings (all-MiniLM-L6-v2)
+            </div>
+          </div>
+        </div>
+
+        <!-- Results Section -->
+        <div id="inspector-results-container" class="flex flex-col gap-4">
+          <div class="p-12 text-center text-outline glass-panel rounded-2xl flex flex-col items-center justify-center gap-3">
+            <span class="material-symbols-outlined text-4xl text-outline/60">hub</span>
+            <p class="text-xs font-medium text-charcoal-text">Enter a prompt above or click one of the short-form test chips to visualize cosine similarities.</p>
+            <p class="text-[11px] text-on-surface-variant">Matches exceeding the threshold cutoff qualify for immediate Tier 2 Semantic Cache retrieval.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW 4: CACHE SEEDER & GOLDEN PRE-WARMING ENGINE -->
+      <div id="view-seeder" class="view-section w-full">
+        <div class="hidden md:flex justify-between items-end mb-8 border-b border-outline-variant/30 pb-4">
+          <div>
+            <h1 class="font-display-lg text-display-lg text-charcoal-text mb-2 flex items-center gap-2.5">
+              <span class="material-symbols-outlined text-sage-accent text-3xl">dataset</span>
+              Cache Seeder & Pre-warming Engine
+            </h1>
+            <p class="font-body-md text-body-md text-on-surface-variant">
+              Pre-populate Tier 1 exact keys and compute Tier 2 dense vectors in advance to guarantee instantaneous responses.
+            </p>
+          </div>
+          <div class="flex items-center gap-3">
+            <button onclick="loadDefaultGoldenFaqs()"
+              class="bg-secondary-container hover:bg-secondary-fixed text-on-secondary-container px-4 py-2 rounded-full border border-secondary-fixed-dim font-label-md text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer">
+              <span class="material-symbols-outlined text-sm">bolt</span> ⚡ Load 8 Golden Knowledge Pairs
+            </button>
+            <button onclick="clearCacheAction()"
+              class="bg-surface-container hover:bg-surface-container-high text-charcoal-text px-4 py-2 rounded-full border border-outline-variant/50 font-label-md text-xs font-semibold transition-colors cursor-pointer">
+              Purge Cache
+            </button>
+          </div>
+        </div>
+
+        <!-- Ingestion Layout: Bulk Drag-and-Drop & Quick Add -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
+          <!-- Left Column: Bulk Ingestion -->
+          <div class="lg:col-span-7 flex flex-col gap-6">
+            <div class="glass-panel rounded-2xl p-6 flex flex-col gap-5 border border-outline-variant/30">
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-outline-variant/20">
+                <h3 class="font-headline-md text-base text-charcoal-text font-semibold flex items-center gap-2">
+                  <span class="material-symbols-outlined text-outline">upload_file</span>
+                  Bulk File Ingestion (.JSON / .CSV)
+                </h3>
+                <div class="flex items-center gap-2 text-xs">
+                  <button onclick="downloadSampleJson()" class="text-sage-accent font-semibold hover:underline flex items-center gap-0.5 cursor-pointer">
+                    <span class="material-symbols-outlined text-[14px]">download</span> JSON Template
+                  </button>
+                  <span class="text-outline-variant">•</span>
+                  <button onclick="downloadSampleCsv()" class="text-sage-accent font-semibold hover:underline flex items-center gap-0.5 cursor-pointer">
+                    <span class="material-symbols-outlined text-[14px]">download</span> CSV Template
+                  </button>
+                </div>
+              </div>
+
+              <!-- Drag & Drop Zone -->
+              <div id="seeder-dropzone"
+                onclick="document.getElementById('seeder-file-input').click()"
+                ondragover="handleDragOver(event)"
+                ondragleave="handleDragLeave(event)"
+                ondrop="handleFileDrop(event)"
+                class="border-2 border-dashed border-outline-variant/60 rounded-2xl p-8 flex flex-col items-center justify-center text-center bg-surface-container-low hover:bg-surface-container transition-all cursor-pointer group">
+                <input type="file" id="seeder-file-input" accept=".json,.csv" onchange="handleFileSelect(event)" class="hidden">
+                <div class="w-12 h-12 rounded-full bg-surface-container flex items-center justify-center text-outline group-hover:text-sage-accent group-hover:scale-110 transition-all mb-3">
+                  <span class="material-symbols-outlined text-2xl">cloud_upload</span>
+                </div>
+                <p class="font-semibold text-charcoal-text text-sm mb-1">Click to browse or drag & drop files here</p>
+                <p class="text-xs text-on-surface-variant">Upload prompt-response knowledge datasets in <code class="font-mono bg-surface-container px-1 py-0.5 rounded text-[11px]">.json</code> or <code class="font-mono bg-surface-container px-1 py-0.5 rounded text-[11px]">.csv</code></p>
+              </div>
+
+              <!-- Parsed File Preview & Commit Action -->
+              <div id="seeder-preview-panel" class="hidden flex-col gap-3">
+                <div class="flex justify-between items-center text-xs">
+                  <span id="seeder-preview-count" class="font-semibold text-charcoal-text">0 items parsed</span>
+                  <button onclick="resetSeederFile()" class="text-terracotta-accent hover:underline cursor-pointer">Discard File</button>
+                </div>
+                <div class="max-h-52 overflow-y-auto border border-outline-variant/30 rounded-xl">
+                  <table class="w-full text-left text-xs border-collapse">
+                    <thead class="bg-surface-container-low sticky top-0">
+                      <tr>
+                        <th class="p-2.5 border-b border-outline-variant font-medium">Prompt</th>
+                        <th class="p-2.5 border-b border-outline-variant font-medium">Golden Response</th>
+                        <th class="p-2.5 border-b border-outline-variant text-right">Tokens</th>
+                      </tr>
+                    </thead>
+                    <tbody id="seeder-preview-tbody" class="divide-y divide-outline-variant/20 bg-surface-container-lowest font-mono text-[11px]">
+                    </tbody>
+                  </table>
+                </div>
+                <button id="commit-seed-btn" onclick="commitSeededItems()"
+                  class="w-full py-3 rounded-xl bg-sage-accent hover:bg-secondary text-white font-semibold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm">
+                  <span class="material-symbols-outlined text-sm">bolt</span>
+                  <span id="commit-seed-text">Pre-warm Cache with Parsed Items</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Column: Manual Quick-Seed Form -->
+          <div class="lg:col-span-5 flex flex-col gap-6">
+            <div class="glass-panel rounded-2xl p-6 flex flex-col gap-4 border border-outline-variant/30">
+              <h3 class="font-headline-md text-base text-charcoal-text font-semibold flex items-center gap-2">
+                <span class="material-symbols-outlined text-outline">edit_note</span>
+                Manual Golden Injection
+              </h3>
+              <p class="text-xs text-on-surface-variant">Inject an individual canonical prompt and authoritative answer directly into runtime memory.</p>
+
+              <div class="flex flex-col gap-1.5">
+                <label class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider" for="manual-seed-prompt">Question / Canonical Prompt</label>
+                <textarea id="manual-seed-prompt" rows="2" class="w-full bg-surface-container-lowest border border-outline-variant/40 rounded-xl p-3 text-xs text-on-surface focus:border-sage-accent focus:ring-1 focus:ring-sage-accent focus:outline-none" placeholder="e.g. What is the boiling point of water at sea level?"></textarea>
+              </div>
+
+              <div class="flex flex-col gap-1.5">
+                <label class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider" for="manual-seed-response">Authoritative Completion / Answer</label>
+                <textarea id="manual-seed-response" rows="3" class="w-full bg-surface-container-lowest border border-outline-variant/40 rounded-xl p-3 text-xs text-on-surface focus:border-sage-accent focus:ring-1 focus:ring-sage-accent focus:outline-none" placeholder="e.g. Water boils at 100°C (212°F) at standard atmospheric pressure (1 atm)."></textarea>
+              </div>
+
+              <div class="flex justify-between items-center text-xs">
+                <label class="text-on-surface-variant font-medium" for="manual-seed-tokens">Max Tokens Budget: <span id="manual-seed-tokens-val" class="font-mono font-bold text-charcoal-text">35</span></label>
+                <input id="manual-seed-tokens" type="range" min="10" max="100" step="5" value="35"
+                  oninput="document.getElementById('manual-seed-tokens-val').innerText = this.value"
+                  class="w-28 accent-sage-accent cursor-pointer">
+              </div>
+
+              <button onclick="submitManualSeed()"
+                class="w-full py-2.5 rounded-xl bg-charcoal-text hover:bg-terracotta-accent text-white font-semibold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer mt-1 shadow-sm">
+                <span class="material-symbols-outlined text-sm">add_circle</span>
+                Seed into Cache
+              </button>
+            </div>
+
+            <!-- Pre-warming Architecture Explainer -->
+            <div class="bg-surface-container-low rounded-2xl p-5 border border-outline-variant/30 flex flex-col gap-2 text-xs">
+              <span class="font-semibold text-charcoal-text flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-sage-accent text-sm">info</span> How Pre-warming Works
+              </span>
+              <p class="text-on-surface-variant leading-relaxed">
+                Pre-warming indexes exact string keys in the Tier 1 hash map and computes local sentence embeddings (<code class="font-mono bg-surface-container px-1 rounded text-[11px]">all-MiniLM-L6-v2</code>) for Tier 2 dense vector matching.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    let currentMode = 'single';
+
+    function switchView(viewName) {
+      document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+      const target = document.getElementById(`view-${viewName}`);
+      if (target) target.classList.add('active');
+
+      ['playground', 'dashboard', 'inspector', 'seeder'].forEach(name => {
+        const btn = document.getElementById(`nav-btn-${name}`);
+        if (btn) {
+          if (name === viewName) {
+            btn.classList.add('bg-secondary-container', 'text-on-secondary-container', 'font-semibold');
+            btn.classList.remove('text-on-surface-variant');
+          } else {
+            btn.classList.remove('bg-secondary-container', 'text-on-secondary-container', 'font-semibold');
+            btn.classList.add('text-on-surface-variant');
+          }
+        }
+      });
+
+      if (viewName === 'dashboard') {
+        loadDashboardData();
+        loadCacheEntries();
+      } else if (viewName === 'inspector') {
+        initVectorInspector();
+      } else if (viewName === 'seeder') {
+        fetchStatus();
+      }
+    }
+
+    function setPrompt(text) {
+      const el = document.getElementById('prompt-input');
+      if (el) {
+        el.value = text;
+        el.focus();
+      }
+    }
+
+    const promptInputEl = document.getElementById('prompt-input');
+    if (promptInputEl) {
+      promptInputEl.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          if (e.shiftKey) {
+            // Shift + Enter: Move to a new line (default behavior)
+            return;
+          }
+          if (!e.isComposing) {
+            // Enter: Run prompt generation without creating a newline
+            e.preventDefault();
+            runGeneration();
+          }
+        }
+      });
+    }
+
+    async function fetchStatus() {
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+        if (data.cache_entries !== undefined) {
+          document.getElementById('cache-entries-pill').innerText = `Cache Entries: ${data.cache_entries}`;
+          const dashVal = document.getElementById('dash-cache-val');
+          const dashBar = document.getElementById('dash-cache-bar');
+          if (dashVal) dashVal.innerText = `${data.cache_entries} Entries`;
+          if (dashBar) dashBar.style.width = `${Math.min(data.cache_entries * 20, 100)}%`;
+        }
+        if (data.generative_model) {
+          const modelEl = document.getElementById('runtime-model-name');
+          if (modelEl) modelEl.innerText = `${data.generative_model} (Groq)`;
+        }
+      } catch (e) { }
+    }
+    fetchStatus();
+
+    async function runGeneration() {
+      const btnText = document.getElementById('btn-text');
+      if (btnText && btnText.textContent === "Processing...") {
+        return;
+      }
+
+      const rawInput = document.getElementById('prompt-input').value.trim();
+      if (!rawInput) { alert('Please enter prompt text!'); return; }
+
+      const maxTokens = parseInt(document.getElementById('max-tokens').value);
+      const enableCache = document.getElementById('toggle-cache').checked;
+      const enableSemantic = document.getElementById('toggle-semantic').checked;
+      const simThresh = parseFloat(document.getElementById('sim-threshold').value);
+
+      btnText.textContent = "Processing...";
+
+      try {
+        const url = `/generate?enable_cache=${enableCache}&enable_semantic_cache=${enableSemantic}&similarity_threshold=${simThresh}`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: rawInput, max_new_tokens: maxTokens })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Execution error');
+
+        updateSingleUI(data);
+        fetchStatus();
+      } catch (err) {
+        alert('Error: ' + err.message);
+      } finally {
+        btnText.textContent = 'Generate Output';
+      }
+    }
+
+    function updateSingleUI(data) {
+      const outputEl = document.getElementById('output-text');
+      if (outputEl) outputEl.innerText = data.generated_text;
+
+      const statLat = document.getElementById('stat-latency');
+      if (statLat) statLat.innerHTML = `${data.total_latency_ms}<span class="text-sm font-normal text-on-surface-variant ml-0.5">ms</span>`;
+
+      const statCompute = document.getElementById('stat-compute');
+      if (statCompute) statCompute.innerHTML = `${data.processing_time_ms}<span class="text-sm font-normal text-on-surface-variant ml-0.5">ms</span>`;
+
+      const statQueue = document.getElementById('stat-queue');
+      if (statQueue) statQueue.innerHTML = `${data.queue_wait_time_ms || 0}<span class="text-sm font-normal text-on-surface-variant ml-0.5">ms</span>`;
+
+      const statPrompt = document.getElementById('stat-prompt-toks');
+      if (statPrompt) statPrompt.innerText = data.prompt_tokens;
+
+      const statGen = document.getElementById('stat-gen-toks');
+      if (statGen) statGen.innerText = data.generated_tokens;
+
+      const reqBadge = document.getElementById('output-req-badge');
+      if (reqBadge && data.request_id) {
+        document.getElementById('output-req-id').innerText = data.request_id;
+        reqBadge.dataset.reqId = data.request_id;
+        reqBadge.style.display = 'inline-flex';
+      }
+
+      const cacheBadge = document.getElementById('cache-badge');
+      const banner = document.getElementById('transparency-banner');
+      const title = document.getElementById('transparency-title');
+      const details = document.getElementById('transparency-details');
+
+      const savingsBanner = document.getElementById('transparency-savings');
+
+      if (data.match_type === "exact") {
+        if (cacheBadge) {
+          cacheBadge.className = "bg-secondary-container text-on-secondary-container border border-secondary-fixed-dim px-2.5 py-1 rounded-full font-label-md text-[10px] uppercase tracking-wider font-semibold";
+          cacheBadge.innerText = "Tier 1: Exact Hit (100%)";
+        }
+        if (banner) {
+          banner.style.display = "block";
+          banner.className = "p-3 rounded-2xl border bg-secondary-container/30 border-secondary-fixed text-xs font-medium";
+        }
+        if (title) title.innerHTML = `<span class="material-symbols-outlined text-[16px] text-sage-accent">verified</span> Tier 1 Exact Match Hit`;
+        if (details) details.innerText = `Instant match against key: "${data.matched_prompt}" (No model inference required)`;
+        if (savingsBanner) {
+          const avoided = (data.prompt_tokens || 0) + (data.generated_tokens || 0);
+          const rateSelect = document.getElementById('provider-rate-select');
+          const rate = rateSelect ? parseFloat(rateSelect.value) : 0.0008;
+          const cost = ((avoided / 1000) * rate).toFixed(4);
+          savingsBanner.style.display = "flex";
+          savingsBanner.innerHTML = `<span class="material-symbols-outlined text-[14px]">savings</span> Avoided ${avoided} remote tokens (Saved ~$${cost}) • 0.0ms compute wait`;
+        }
+      } else if (data.match_type === "semantic") {
+        if (cacheBadge) {
+          cacheBadge.className = "bg-tertiary-container text-tertiary border border-tertiary-fixed-dim px-2.5 py-1 rounded-full font-label-md text-[10px] uppercase tracking-wider font-semibold";
+          cacheBadge.innerText = `Tier 2: Semantic Hit (${(data.similarity_score || 0).toFixed(2)})`;
+        }
+        if (banner) {
+          banner.style.display = "block";
+          banner.className = "p-3 rounded-2xl border bg-tertiary-container/30 border-tertiary-fixed text-xs font-medium";
+        }
+        if (title) title.innerHTML = `<span class="material-symbols-outlined text-[16px] text-tertiary">hub</span> Tier 2 Semantic Cosine Match (Score: ${data.similarity_score})`;
+        if (details) details.innerText = `Matched cached prompt: "${data.matched_prompt}"`;
+        if (savingsBanner) {
+          const avoided = (data.prompt_tokens || 0) + (data.generated_tokens || 0);
+          const rateSelect = document.getElementById('provider-rate-select');
+          const rate = rateSelect ? parseFloat(rateSelect.value) : 0.0008;
+          const cost = ((avoided / 1000) * rate).toFixed(4);
+          savingsBanner.style.display = "flex";
+          savingsBanner.innerHTML = `<span class="material-symbols-outlined text-[14px]">savings</span> Avoided ${avoided} remote tokens (Saved ~$${cost}) • 0.0ms compute wait`;
+        }
+      } else {
+        if (cacheBadge) {
+          cacheBadge.className = "bg-surface-container-highest text-on-surface-variant border border-outline-variant px-2.5 py-1 rounded-full font-label-md text-[10px] uppercase tracking-wider font-semibold";
+          cacheBadge.innerText = "Cache Miss (Model Generated)";
+        }
+        if (banner) banner.style.display = "none";
+        if (savingsBanner) savingsBanner.style.display = "none";
+      }
+    }
+
+    let cachedLogs = [];
+
+    async function loadDashboardData() {
+      try {
+        const [statusRes, logsRes] = await Promise.all([
+          fetch('/api/status'),
+          fetch('/api/logs')
+        ]);
+        const statusData = await statusRes.json();
+        const logsData = await logsRes.json();
+        cachedLogs = logsData;
+
+        fetchStatus();
+
+        if (logsData.length > 0) {
+          const avgLat = logsData.reduce((acc, r) => acc + (r.total_latency_ms || 0), 0) / logsData.length;
+          const totalGenToks = logsData.reduce((acc, r) => acc + (r.generated_tokens || 0), 0);
+          const totalSecs = logsData.reduce((acc, r) => acc + ((r.total_latency_ms || 0) / 1000), 0);
+          const tps = totalSecs > 0 ? (totalGenToks / totalSecs) : 0;
+          const cacheHits = logsData.filter(r => r.cache_hit).length;
+          const hitRate = (cacheHits / logsData.length) * 100;
+
+          document.getElementById('dash-avg-lat').innerText = `${avgLat.toFixed(0)}ms`;
+          document.getElementById('dash-tps').innerText = `${tps.toFixed(1)}`;
+          document.getElementById('dash-hit-rate').innerText = `${hitRate.toFixed(0)}%`;
+        }
+
+        updateSavingsWidget();
+
+        const tbody = document.getElementById('dash-table-body');
+        if (logsData.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-outline">No telemetry logs recorded yet.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = '';
+        logsData.forEach(r => {
+          const tr = document.createElement('tr');
+          tr.className = "hover:bg-surface-container transition-colors group";
+
+          let statusBadge = '';
+          if (r.match_type === "exact") {
+            statusBadge = `
+              <span class="inline-flex items-center gap-1.5 py-1 px-3 rounded-full bg-surface-container-highest text-charcoal-text border border-outline-variant text-xs font-semibold">
+                <span class="material-symbols-outlined text-[12px]">database</span> TIER 1 EXACT
+              </span>
+            `;
+          } else if (r.match_type === "semantic") {
+            statusBadge = `
+              <span class="inline-flex items-center gap-1.5 py-1 px-3 rounded-full bg-tertiary-container text-tertiary border border-tertiary-fixed text-xs font-semibold">
+                <span class="material-symbols-outlined text-[12px]">hub</span> TIER 2 (${r.similarity_score})
+              </span>
+            `;
+          } else {
+            statusBadge = `
+              <span class="inline-flex items-center gap-1.5 py-1 px-3 rounded-full bg-secondary-container/40 text-on-secondary-container border border-secondary-fixed/50 text-xs font-semibold">
+                <div class="w-1.5 h-1.5 rounded-full bg-sage-accent"></div> 200 OK (MISS)
+              </span>
+            `;
+          }
+
+          tr.innerHTML = `
+            <td class="p-4">
+              <button onclick="inspectRequest('${r.request_id}')" title="Click to inspect this request in detail"
+                class="inline-flex items-center gap-1.5 font-mono text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-surface-container-low hover:bg-surface-container-high text-charcoal-text hover:text-terracotta-accent border border-outline-variant/40 hover:border-terracotta-accent/50 transition-all cursor-pointer shadow-xs group/btn">
+                <span class="material-symbols-outlined text-[13px] text-sage-accent group-hover/btn:text-terracotta-accent transition-colors">tag</span>
+                <span>${r.request_id}</span>
+                <span class="material-symbols-outlined text-[13px] opacity-40 group-hover/btn:opacity-100 group-hover/btn:translate-x-0.5 transition-all">open_in_new</span>
+              </button>
+            </td>
+            <td class="p-4 text-on-surface-variant font-medium">${r.total_latency_ms}ms</td>
+            <td class="p-4 text-on-surface-variant font-mono text-xs">${r.prompt_tokens} / ${r.generated_tokens}</td>
+            <td class="p-4 text-right">${statusBadge}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      } catch (e) { console.error(e); }
+    }
+
+    async function loadCacheEntries() {
+      try {
+        const res = await fetch('/api/cache_entries');
+        const entries = await res.json();
+        const tbody = document.getElementById('cache-entries-body');
+
+        if (entries.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="3" class="p-4 text-center text-outline">No cache entries stored yet.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = '';
+        entries.forEach(e => {
+          const tr = document.createElement('tr');
+          tr.className = "hover:bg-surface-container";
+          tr.innerHTML = `
+            <td class="p-2 font-mono text-[11px] text-on-surface">${e.prompt}</td>
+            <td class="p-2 text-outline text-[11px]">${e.age_seconds}s ago</td>
+            <td class="p-2 text-right">
+              <button onclick="testNeighborInPlayground('${e.prompt.replace(/'/g, "\\'")}', ${e.max_new_tokens || 20})" class="text-sage-accent hover:underline text-[11px] font-semibold mr-3 cursor-pointer">
+                Test
+              </button>
+              <button onclick="evictPrompt('${encodeURIComponent(e.prompt)}')" class="text-tertiary hover:underline text-[11px] font-semibold cursor-pointer">
+                Evict
+              </button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      } catch (e) { console.error(e); }
+    }
+
+    async function evictPrompt(encodedPrompt) {
+      try {
+        const prompt = decodeURIComponent(encodedPrompt);
+        await fetch(`/clear_cache?prompt=${encodeURIComponent(prompt)}`, { method: 'POST' });
+        loadCacheEntries();
+        fetchStatus();
+      } catch (e) { alert('Error evicting prompt'); }
+    }
+
+    async function clearCacheAction() {
+      try {
+        await fetch('/clear_cache', { method: 'POST' });
+        alert('Cache cleared successfully!');
+        fetchStatus();
+        loadDashboardData();
+        loadCacheEntries();
+      } catch (e) { alert('Error clearing cache'); }
+    }
+
+    function copyOutput() {
+      const text = document.getElementById('output-text').innerText;
+      navigator.clipboard.writeText(text).then(() => showToast('Copied output to clipboard!'));
+    }
+
+    // ==========================================
+    // COST & CARBON SAVINGS CALCULATOR
+    // ==========================================
+    function updateSavingsWidget() {
+      if (!cachedLogs || cachedLogs.length === 0) {
+        const counterEl = document.getElementById('savings-hero-counter');
+        if (counterEl) {
+          counterEl.innerHTML = `Total Saved: <span class="text-sage-accent">$0.00</span> | <span class="text-terracotta-accent">0</span> tokens avoided`;
+        }
+        const dEl = document.getElementById('stat-saved-dollars');
+        if (dEl) dEl.innerText = '$0.00';
+        const tEl = document.getElementById('stat-saved-tokens');
+        if (tEl) tEl.innerText = '0';
+        const cEl = document.getElementById('stat-saved-carbon');
+        if (cEl) cEl.innerText = '0.00g';
+        const sEl = document.getElementById('stat-saved-time');
+        if (sEl) sEl.innerText = '0.0s';
+        return;
+      }
+
+      const cachedHits = cachedLogs.filter(r => r.cache_hit);
+      const promptToks = cachedHits.reduce((acc, r) => acc + (r.prompt_tokens || 0), 0);
+      const genToks = cachedHits.reduce((acc, r) => acc + (r.generated_tokens || 0), 0);
+      const totalTokensAvoided = promptToks + genToks;
+
+      const rateSelect = document.getElementById('provider-rate-select');
+      const providerRate = rateSelect ? parseFloat(rateSelect.value) : 0.0008;
+
+      const dollarsSaved = (totalTokensAvoided / 1000.0) * providerRate;
+      const carbonGrams = (totalTokensAvoided / 1000.0) * 0.12;
+
+      const missLogs = cachedLogs.filter(r => !r.cache_hit);
+      const avgMissLat = missLogs.length > 0 ? (missLogs.reduce((acc, r) => acc + (r.total_latency_ms || 0), 0) / missLogs.length) : 480.0;
+      const totalWaitSec = ((cachedHits.length * avgMissLat) / 1000.0);
+
+      const heroCounter = document.getElementById('savings-hero-counter');
+      if (heroCounter) {
+        heroCounter.innerHTML = `Total Saved: <span class="text-sage-accent">$${dollarsSaved.toFixed(2)}</span> | <span class="text-terracotta-accent">${totalTokensAvoided.toLocaleString()}</span> tokens avoided`;
+      }
+
+      const statDollars = document.getElementById('stat-saved-dollars');
+      if (statDollars) statDollars.innerText = `$${dollarsSaved >= 10 ? dollarsSaved.toFixed(2) : dollarsSaved.toFixed(4)}`;
+
+      const statDollarsSub = document.getElementById('stat-saved-dollars-sub');
+      if (statDollarsSub) statDollarsSub.innerText = `${cachedHits.length} cache hits avoided upstream API`;
+
+      const statTokens = document.getElementById('stat-saved-tokens');
+      if (statTokens) statTokens.innerText = totalTokensAvoided.toLocaleString();
+
+      const statTokensBk = document.getElementById('stat-saved-tokens-breakdown');
+      if (statTokensBk) statTokensBk.innerText = `${promptToks.toLocaleString()} prompt • ${genToks.toLocaleString()} generated`;
+
+      const statCarbon = document.getElementById('stat-saved-carbon');
+      if (statCarbon) statCarbon.innerText = carbonGrams >= 1000 ? `${(carbonGrams / 1000).toFixed(2)}kg` : `${carbonGrams.toFixed(2)}g`;
+
+      const statTime = document.getElementById('stat-saved-time');
+      if (statTime) statTime.innerText = `${totalWaitSec.toFixed(1)}s`;
+    }
+
+    // ==========================================
+    // LIVE VECTOR SIMILARITY INSPECTOR
+    // ==========================================
+    function initVectorInspector() {
+      fetchStatus();
+      const input = document.getElementById('inspector-query-input');
+      if (input && input.value.trim()) {
+        runVectorInspection();
+      }
+    }
+
+    function setInspectorQuery(text) {
+      const input = document.getElementById('inspector-query-input');
+      if (input) {
+        input.value = text;
+        runVectorInspection();
+      }
+    }
+
+    function inspectPlaygroundPrompt() {
+      const pInput = document.getElementById('prompt-input');
+      const text = pInput ? pInput.value.trim() : '';
+      switchView('inspector');
+      if (text) {
+        setInspectorQuery(text);
+      }
+    }
+
+    function prewarmFromInspector() {
+      loadDefaultGoldenFaqs();
+      setTimeout(() => {
+        runVectorInspection();
+      }, 500);
+    }
+
+    function testNeighborInPlayground(promptText, maxTokens) {
+      switchView('playground');
+      setPrompt(promptText);
+      if (maxTokens) {
+        const slider = document.getElementById('max-tokens');
+        const val = document.getElementById('token-val');
+        if (slider) slider.value = maxTokens;
+        if (val) val.textContent = maxTokens;
+      }
+      showToast(`Loaded "${promptText.substring(0, 30)}..." into Playground!`);
+    }
+
+    async function runVectorInspection() {
+      const queryInput = document.getElementById('inspector-query-input');
+      const prompt = queryInput ? queryInput.value.trim() : '';
+      if (!prompt) {
+        showToast('Please enter a query to inspect vector similarities.');
+        return;
+      }
+
+      const topK = parseInt(document.getElementById('inspector-top-k')?.value || '5');
+      const thresh = parseFloat(document.getElementById('inspector-thresh-slider')?.value || '0.90');
+
+      const btnText = document.getElementById('inspector-btn-text');
+      if (btnText) btnText.innerText = 'Probing Vectors...';
+
+      const container = document.getElementById('inspector-results-container');
+      container.innerHTML = `
+        <div class="glass-panel p-10 text-center rounded-2xl flex flex-col items-center justify-center gap-3 border border-outline-variant/30">
+          <div class="w-8 h-8 rounded-full border-2 border-sage-accent border-t-transparent animate-spin"></div>
+          <p class="text-xs font-semibold text-charcoal-text">Computing Dense Vector Embedding & Dot Products...</p>
+          <p class="text-[11px] text-on-surface-variant font-mono">Model: all-MiniLM-L6-v2 (L2 Normalized)</p>
+        </div>
+      `;
+
+      try {
+        const res = await fetch('/api/vector_inspect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt, top_k: topK, similarity_threshold: thresh })
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          container.innerHTML = `<div class="p-6 text-center text-error bg-error-container/20 border border-error/30 rounded-2xl text-xs font-semibold">${err.detail || 'Failed to inspect vectors'}</div>`;
+          return;
+        }
+
+        const data = await res.json();
+        renderVectorInspectorResults(data, thresh);
+      } catch (e) {
+        container.innerHTML = `<div class="p-6 text-center text-error bg-error-container/20 border border-error/30 rounded-2xl text-xs font-semibold">Error inspecting vectors: ${e.message}</div>`;
+      } finally {
+        if (btnText) btnText.innerText = 'Inspect Vectors';
+      }
+    }
+
+    function renderVectorInspectorResults(data, threshold) {
+      const container = document.getElementById('inspector-results-container');
+      const statsEl = document.getElementById('inspector-cache-stats');
+      if (statsEl) {
+        statsEl.innerText = `Evaluated against ${data.total_cache_entries || 0} active cached vectors`;
+      }
+
+      if (!data.neighbors || data.neighbors.length === 0) {
+        container.innerHTML = `
+          <div class="glass-panel p-10 text-center rounded-2xl flex flex-col items-center justify-center gap-3 border border-outline-variant/30">
+            <span class="material-symbols-outlined text-4xl text-outline/60">database_off</span>
+            <h4 class="font-headline-md text-charcoal-text font-bold text-base">Cache Store is Currently Empty</h4>
+            <p class="text-xs text-on-surface-variant max-w-md">No vectors exist in memory yet. Pre-warm the cache with golden FAQs or submit queries in the playground first.</p>
+            <button onclick="loadDefaultGoldenFaqs()" class="mt-2 px-5 py-2.5 rounded-full bg-secondary-container hover:bg-secondary-fixed text-on-secondary-container font-semibold text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm">
+              <span class="material-symbols-outlined text-sm">bolt</span> ⚡ 1-Click Pre-warm 8 Golden FAQs
+            </button>
+          </div>
+        `;
+        return;
+      }
+
+      let html = `
+        <!-- Query Vector Summary Card -->
+        <div class="bg-surface-container-low border border-outline-variant/40 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div>
+            <span class="text-[10px] font-semibold text-on-surface-variant uppercase tracking-wider block">Target Query</span>
+            <span class="font-bold text-charcoal-text text-sm">"${data.query}"</span>
+            <span class="text-outline text-[11px] block mt-0.5">Normalized form: <code class="font-mono bg-surface-container px-1 py-0.5 rounded text-[10px] text-charcoal-text">${data.normalized_query}</code></span>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <span class="px-3 py-1 rounded-full bg-surface-container-lowest text-charcoal-text border border-outline-variant/40 font-semibold text-xs shadow-xs">
+              Top ${data.neighbors.length} Nearest Returned
+            </span>
+          </div>
+        </div>
+        <div class="flex flex-col gap-3">
+      `;
+
+      data.neighbors.forEach((n, idx) => {
+        const isHit = n.passes_threshold;
+        const simPct = n.similarity_pct;
+        const score = n.similarity_score;
+
+        let barColor = 'bg-slate-400';
+        let badgeClass = 'bg-surface-container text-on-surface-variant border-outline-variant/40';
+        let statusText = 'Below Threshold (Miss)';
+        let statusIcon = 'close';
+
+        if (score >= threshold) {
+          barColor = 'bg-emerald-600';
+          badgeClass = 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800';
+          statusText = 'Meets Threshold (Tier 2 Hit)';
+          statusIcon = 'check_circle';
+        } else if (score >= 0.75) {
+          barColor = 'bg-amber-500';
+          badgeClass = 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800';
+          statusText = 'Moderate Similarity (Miss)';
+          statusIcon = 'remove_circle_outline';
+        }
+
+        const exactMatchChip = n.is_exact
+          ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-secondary-container text-on-secondary-container border border-secondary-fixed">Exact Match</span>`
+          : n.is_norm_exact
+          ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-tertiary-container text-on-tertiary-container border border-tertiary-fixed">Canonical Match</span>`
+          : '';
+
+        html += `
+          <div class="glass-panel rounded-2xl p-5 border ${isHit ? 'border-sage-accent/50 bg-surface-container-lowest shadow-sm' : 'border-outline-variant/30 bg-surface-container-lowest/80'} flex flex-col gap-3 transition-all">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div class="flex items-center gap-2">
+                <span class="w-6 h-6 rounded-full bg-surface-container flex items-center justify-center font-bold text-xs text-charcoal-text border border-outline-variant/40 shrink-0">
+                  #${idx + 1}
+                </span>
+                <span class="font-headline-md font-bold text-charcoal-text text-sm">"${n.prompt}"</span>
+                ${exactMatchChip}
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${badgeClass}">
+                  <span class="material-symbols-outlined text-[14px]">${statusIcon}</span>
+                  ${(score * 100).toFixed(1)}% Cosine (${score.toFixed(4)})
+                </span>
+              </div>
+            </div>
+
+            <!-- Similarity Progress Bar with Cutoff Indicator -->
+            <div class="space-y-1">
+              <div class="flex justify-between text-[11px] text-on-surface-variant font-medium">
+                <span>Vector Proximity: ${score.toFixed(4)}</span>
+                <span>Cutoff Threshold: ${(threshold * 100).toFixed(0)}%</span>
+              </div>
+              <div class="relative w-full h-3 bg-surface-container rounded-full overflow-hidden border border-outline-variant/30">
+                <div class="absolute top-0 bottom-0 w-[2px] bg-charcoal-text z-10" style="left: ${threshold * 100}%;" title="Threshold: ${(threshold * 100).toFixed(0)}%"></div>
+                <div class="h-full ${barColor} rounded-full transition-all duration-500" style="width: ${Math.max(0, Math.min(100, simPct))}%;"></div>
+              </div>
+            </div>
+
+            <!-- Cached Response Preview -->
+            <div class="bg-surface-container-low rounded-xl p-3 text-xs border border-outline-variant/20 flex flex-col gap-1">
+              <span class="text-[10px] font-semibold text-on-surface-variant uppercase tracking-wider">Cached Output</span>
+              <p class="font-mono text-charcoal-text text-[11px] leading-relaxed line-clamp-2">${n.response_preview}</p>
+            </div>
+
+            <!-- Card Footer -->
+            <div class="flex justify-between items-center text-[11px] text-on-surface-variant pt-1 border-t border-outline-variant/20">
+              <div class="flex items-center gap-3">
+                <span>Age: ${n.age_seconds}s</span>
+                <span>•</span>
+                <span>Max Tokens: ${n.max_new_tokens}</span>
+                <span>•</span>
+                <span class="${isHit ? 'text-sage-accent font-semibold' : 'text-outline'}">${statusText}</span>
+              </div>
+              <button onclick="testNeighborInPlayground('${n.prompt.replace(/'/g, "\\'")}')" class="px-3 py-1 rounded-full bg-surface-container hover:bg-surface-container-high text-charcoal-text font-semibold text-xs flex items-center gap-1 transition-colors cursor-pointer">
+                <span class="material-symbols-outlined text-[14px]">play_arrow</span> Test in Playground
+              </button>
+            </div>
+          </div>
+        `;
+      });
+
+      html += '</div>';
+      container.innerHTML = html;
+    }
+
+    // ==========================================
+    // CACHE PRE-WARMING & SEEDING ENGINE
+    // ==========================================
+    let parsedSeedItems = [];
+
+    async function loadDefaultGoldenFaqs() {
+      try {
+        const res = await fetch('/api/seed_defaults', { method: 'POST' });
+        const data = await res.json();
+        showToast(`⚡ Pre-warmed ${data.seeded_count} Golden FAQs! Active Cache: ${data.total_cache_entries}`);
+        fetchStatus();
+        loadCacheEntries();
+        loadDashboardData();
+      } catch (e) {
+        showToast(`Failed to load golden FAQs: ${e.message}`, true);
+      }
+    }
+
+    function handleFileSelect(e) {
+      const file = e.target.files[0];
+      if (file) processSeedFile(file);
+    }
+
+    function handleDragOver(e) {
+      e.preventDefault();
+      document.getElementById('seeder-dropzone')?.classList.add('border-sage-accent', 'bg-surface-container');
+    }
+
+    function handleDragLeave(e) {
+      e.preventDefault();
+      document.getElementById('seeder-dropzone')?.classList.remove('border-sage-accent', 'bg-surface-container');
+    }
+
+    function handleFileDrop(e) {
+      e.preventDefault();
+      handleDragLeave(e);
+      const file = e.dataTransfer.files[0];
+      if (file) processSeedFile(file);
+    }
+
+    function processSeedFile(file) {
+      const isJson = file.name.endsWith('.json');
+      const isCsv = file.name.endsWith('.csv');
+      if (!isJson && !isCsv) {
+        showToast('Please upload a valid .json or .csv file.', true);
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        try {
+          const content = evt.target.result;
+          parsedSeedItems = [];
+          if (isJson) {
+            const json = JSON.parse(content);
+            const list = Array.isArray(json) ? json : (json.items || json.faqs || []);
+            list.forEach(item => {
+              if (item.prompt && (item.response || item.response_text || item.answer)) {
+                parsedSeedItems.push({
+                  prompt: item.prompt.trim(),
+                  response_text: (item.response || item.response_text || item.answer).trim(),
+                  max_new_tokens: parseInt(item.max_new_tokens || item.max_tokens || 40)
+                });
+              }
+            });
+          } else {
+            const lines = content.split(/\r?\n/).filter(l => l.trim().length > 0);
+            let startIdx = 0;
+            if (lines[0].toLowerCase().includes('prompt') && lines[0].toLowerCase().includes('response')) {
+              startIdx = 1;
+            }
+            for (let i = startIdx; i < lines.length; i++) {
+              const parts = parseCsvLine(lines[i]);
+              if (parts.length >= 2 && parts[0].trim() && parts[1].trim()) {
+                parsedSeedItems.push({
+                  prompt: parts[0].trim(),
+                  response_text: parts[1].trim(),
+                  max_new_tokens: parts[2] ? parseInt(parts[2]) : 40
+                });
+              }
+            }
+          }
+
+          if (parsedSeedItems.length === 0) {
+            showToast('No valid prompt-response pairs found in file.', true);
+            return;
+          }
+
+          renderSeederPreview();
+          showToast(`Parsed ${parsedSeedItems.length} items from ${file.name}`);
+        } catch (err) {
+          showToast(`Error parsing file: ${err.message}`, true);
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function parseCsvLine(line) {
+      const res = [];
+      let cur = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (c === '"') {
+          inQuotes = !inQuotes;
+        } else if (c === ',' && !inQuotes) {
+          res.push(cur);
+          cur = '';
+        } else {
+          cur += c;
+        }
+      }
+      res.push(cur);
+      return res.map(s => s.replace(/^"|"$/g, '').trim());
+    }
+
+    function renderSeederPreview() {
+      const panel = document.getElementById('seeder-preview-panel');
+      const tbody = document.getElementById('seeder-preview-tbody');
+      const countEl = document.getElementById('seeder-preview-count');
+      if (!panel || !tbody) return;
+
+      panel.classList.remove('hidden');
+      panel.classList.add('flex');
+      countEl.innerText = `${parsedSeedItems.length} items ready to pre-warm`;
+
+      tbody.innerHTML = '';
+      parsedSeedItems.slice(0, 50).forEach(item => {
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-surface-container-low transition-colors";
+        tr.innerHTML = `
+          <td class="p-2.5 font-medium text-charcoal-text max-w-xs truncate" title="${item.prompt}">${item.prompt}</td>
+          <td class="p-2.5 text-on-surface-variant max-w-xs truncate" title="${item.response_text}">${item.response_text}</td>
+          <td class="p-2.5 text-right font-mono text-outline">${item.max_new_tokens}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function resetSeederFile() {
+      parsedSeedItems = [];
+      const panel = document.getElementById('seeder-preview-panel');
+      if (panel) {
+        panel.classList.add('hidden');
+        panel.classList.remove('flex');
+      }
+      const input = document.getElementById('seeder-file-input');
+      if (input) input.value = '';
+    }
+
+    async function commitSeededItems() {
+      if (parsedSeedItems.length === 0) return;
+      const btnText = document.getElementById('commit-seed-text');
+      if (btnText) btnText.innerText = `Pre-warming ${parsedSeedItems.length} items...`;
+
+      try {
+        const res = await fetch('/api/seed_cache', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: parsedSeedItems })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast(`Successfully seeded ${data.seeded_count} items! Active Cache: ${data.total_cache_entries}`);
+          resetSeederFile();
+          fetchStatus();
+          loadCacheEntries();
+          loadDashboardData();
+        } else {
+          showToast(data.detail || 'Seeding failed', true);
+        }
+      } catch (e) {
+        showToast(`Failed to seed items: ${e.message}`, true);
+      } finally {
+        if (btnText) btnText.innerText = 'Pre-warm Cache with Parsed Items';
+      }
+    }
+
+    async function submitManualSeed() {
+      const pInput = document.getElementById('manual-seed-prompt');
+      const rInput = document.getElementById('manual-seed-response');
+      const tInput = document.getElementById('manual-seed-tokens');
+
+      const prompt = pInput ? pInput.value.trim() : '';
+      const response = rInput ? rInput.value.trim() : '';
+      const tokens = tInput ? parseInt(tInput.value) : 35;
+
+      if (!prompt || !response) {
+        showToast('Please enter both a prompt and golden response.', true);
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/seed_cache', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: [{ prompt, response_text: response, max_new_tokens: tokens }] })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast(`Golden entry injected into Tier 1 and Tier 2!`);
+          pInput.value = '';
+          rInput.value = '';
+          fetchStatus();
+          loadCacheEntries();
+          loadDashboardData();
+        } else {
+          showToast(data.detail || 'Seeding failed', true);
+        }
+      } catch (e) {
+        showToast(`Error: ${e.message}`, true);
+      }
+    }
+
+    function downloadSampleJson() {
+      const sample = [
+        { "prompt": "What is the capital of Japan?", "response_text": "Tokyo is the capital and largest city of Japan.", "max_new_tokens": 30 },
+        { "prompt": "Explain photosynthesis.", "response_text": "Photosynthesis is the process plants use to turn sunlight, water, and CO2 into energy.", "max_new_tokens": 40 }
+      ];
+      downloadBlob(JSON.stringify(sample, null, 2), 'golden_faqs_template.json', 'application/json');
+    }
+
+    function downloadSampleCsv() {
+      const sample = "prompt,response_text,max_new_tokens\n\"What is the capital of Japan?\",\"Tokyo is the capital and largest city of Japan.\",30\n\"Explain photosynthesis.\",\"Photosynthesis is the process plants use to turn sunlight into glucose.\",40";
+      downloadBlob(sample, 'golden_faqs_template.csv', 'text/csv');
+    }
+
+    function downloadBlob(content, filename, type) {
+      const blob = new Blob([content], { type });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function showToast(msg, isError = false) {
+      let toast = document.getElementById('app-toast');
+      if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'app-toast';
+        toast.className = 'fixed bottom-6 right-6 z-[100] px-4 py-3 rounded-2xl shadow-xl font-medium text-xs flex items-center gap-2.5 transition-all duration-300 transform translate-y-12 opacity-0';
+        document.body.appendChild(toast);
+      }
+
+      toast.className = `fixed bottom-6 right-6 z-[100] px-4 py-3 rounded-2xl shadow-xl font-medium text-xs flex items-center gap-2.5 transition-all duration-300 transform ${
+        isError ? 'bg-error text-white' : 'bg-charcoal-text text-white'
+      }`;
+      toast.innerHTML = `<span class="material-symbols-outlined text-[16px]">${isError ? 'error' : 'check_circle'}</span> ${msg}`;
+
+      setTimeout(() => {
+        toast.classList.remove('translate-y-12', 'opacity-0');
+      }, 10);
+
+      setTimeout(() => {
+        toast.classList.add('translate-y-12', 'opacity-0');
+      }, 3500);
+    }
+
+    // ==========================================
+    // REQUEST INSPECTOR MODAL CONTROLLER
+    // ==========================================
+    let currentInspectedData = null;
+
+    function inspectCurrentOutputRequest() {
+      const badge = document.getElementById('output-req-badge');
+      if (badge && badge.dataset.reqId) {
+        inspectRequest(badge.dataset.reqId);
+      }
+    }
+
+    async function inspectRequest(reqId) {
+      if (!reqId) return;
+
+      // Check local cache first for instant opening
+      let data = cachedLogs.find(r => r.request_id === reqId);
+      if (data) {
+        populateModal(data);
+        openRequestModal();
+      }
+
+      // Fetch fresh / complete data from server
+      try {
+        const res = await fetch(`/api/request/${encodeURIComponent(reqId)}`);
+        if (res.ok) {
+          const freshData = await res.json();
+          populateModal(freshData);
+          if (!data) openRequestModal();
+        } else if (!data) {
+          alert(`Request '${reqId}' could not be found.`);
+        }
+      } catch (err) {
+        console.error("Error fetching request details:", err);
+      }
+    }
+
+    function openRequestModal() {
+      const modal = document.getElementById('request-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeRequestModal() {
+      const modal = document.getElementById('request-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+      document.body.style.overflow = '';
+    }
+
+    function populateModal(data) {
+      currentInspectedData = data;
+
+      document.getElementById('modal-req-id').innerText = data.request_id || 'N/A';
+      document.getElementById('modal-timestamp').innerHTML = `
+        <span class="material-symbols-outlined text-[14px]">schedule</span> ${data.timestamp || 'N/A'}
+      `;
+
+      // Status Badge
+      const statusBadge = document.getElementById('modal-status-badge');
+      if (data.match_type === "exact") {
+        statusBadge.className = "inline-flex items-center gap-1.5 py-0.5 px-3 rounded-full bg-secondary-container text-on-secondary-container border border-secondary-fixed-dim text-xs font-semibold";
+        statusBadge.innerHTML = `<span class="material-symbols-outlined text-[13px]">database</span> TIER 1 EXACT MATCH`;
+      } else if (data.match_type === "semantic") {
+        statusBadge.className = "inline-flex items-center gap-1.5 py-0.5 px-3 rounded-full bg-tertiary-container text-tertiary border border-tertiary-fixed text-xs font-semibold";
+        statusBadge.innerHTML = `<span class="material-symbols-outlined text-[13px]">hub</span> TIER 2 SEMANTIC MATCH`;
+      } else {
+        statusBadge.className = "inline-flex items-center gap-1.5 py-0.5 px-3 rounded-full bg-surface-container-highest text-on-surface-variant border border-outline-variant text-xs font-semibold";
+        statusBadge.innerHTML = `<span class="material-symbols-outlined text-[13px]">bolt</span> MODEL GENERATED (MISS)`;
+      }
+
+      // Prompt
+      const promptEl = document.getElementById('modal-prompt');
+      promptEl.innerText = data.prompt || data.matched_prompt || `(Prompt length: ${data.prompt_char_len || 0} characters)`;
+
+      // Cache Match Banner
+      const cacheBanner = document.getElementById('modal-cache-banner');
+      if (data.cache_hit) {
+        cacheBanner.classList.remove('hidden');
+        if (data.match_type === 'exact') {
+          cacheBanner.className = "p-4 rounded-2xl border bg-secondary-container/30 border-secondary-fixed text-xs flex flex-col gap-2";
+          document.getElementById('modal-cache-title').innerHTML = `
+            <span class="material-symbols-outlined text-sage-accent text-[16px]">verified</span> Tier 1 Exact Match
+          `;
+          document.getElementById('modal-cache-score').innerText = "100% Match";
+          document.getElementById('modal-cache-score').className = "font-mono text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-secondary-container text-on-secondary-container";
+        } else {
+          cacheBanner.className = "p-4 rounded-2xl border bg-tertiary-container/30 border-tertiary-fixed text-xs flex flex-col gap-2";
+          document.getElementById('modal-cache-title').innerHTML = `
+            <span class="material-symbols-outlined text-tertiary text-[16px]">hub</span> Tier 2 Semantic Cosine Match
+          `;
+          document.getElementById('modal-cache-score').innerText = `Cosine Score: ${data.similarity_score}`;
+          document.getElementById('modal-cache-score').className = "font-mono text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-tertiary-container text-tertiary";
+        }
+        document.getElementById('modal-matched-prompt').innerText = `Matched cached key: "${data.matched_prompt || data.prompt}"`;
+      } else {
+        cacheBanner.classList.add('hidden');
+      }
+
+      // Output / Generated text
+      const outputEl = document.getElementById('modal-output');
+      outputEl.innerText = data.generated_text || "(Output not recorded in historical telemetry record)";
+
+      // Metrics
+      document.getElementById('modal-metric-latency').innerText = `${data.total_latency_ms || 0}ms`;
+      document.getElementById('modal-metric-compute').innerText = `${data.processing_time_ms || 0}ms`;
+      document.getElementById('modal-metric-queue').innerText = `${data.queue_time_ms || 0}ms`;
+      document.getElementById('modal-metric-tokens').innerText = `${data.prompt_tokens || 0} / ${data.generated_tokens || 0}`;
+
+      // Config
+      const cfgPipeline = document.getElementById('modal-cfg-pipeline');
+      if (cfgPipeline) cfgPipeline.innerText = 'Direct (No Queue)';
+      document.getElementById('modal-cfg-cache').innerText = data.cache_enabled !== false ? 'Enabled' : 'Disabled';
+      document.getElementById('modal-cfg-semantic').innerText = data.semantic_cache_enabled !== false ? 'Enabled' : 'Disabled';
+      document.getElementById('modal-cfg-thresh').innerText = data.similarity_threshold !== undefined ? data.similarity_threshold : '0.90';
+
+      // Raw JSON
+      document.getElementById('modal-raw-json').innerText = JSON.stringify(data, null, 2);
+    }
+
+    function copyModalReqId() {
+      if (!currentInspectedData || !currentInspectedData.request_id) return;
+      navigator.clipboard.writeText(currentInspectedData.request_id).then(() => {
+        const btn = document.getElementById('modal-req-id-btn');
+        const origHtml = btn.innerHTML;
+        btn.innerHTML = `<span class="material-symbols-outlined text-[13px] text-sage-accent">check</span> Copied!`;
+        setTimeout(() => btn.innerHTML = origHtml, 1500);
+      });
+    }
+
+    function copyModalPrompt() {
+      if (!currentInspectedData) return;
+      const text = currentInspectedData.prompt || currentInspectedData.matched_prompt || '';
+      navigator.clipboard.writeText(text).then(() => alert('Prompt copied to clipboard!'));
+    }
+
+    function copyModalOutput() {
+      if (!currentInspectedData) return;
+      const text = currentInspectedData.generated_text || '';
+      navigator.clipboard.writeText(text).then(() => alert('Completion output copied to clipboard!'));
+    }
+
+    function copyModalRawJson() {
+      if (!currentInspectedData) return;
+      navigator.clipboard.writeText(JSON.stringify(currentInspectedData, null, 2)).then(() => alert('Telemetry JSON copied to clipboard!'));
+    }
+
+    function copyCurlForRequest() {
+      if (!currentInspectedData) return;
+      const prompt = currentInspectedData.prompt || currentInspectedData.matched_prompt || '';
+      const maxToks = currentInspectedData.max_new_tokens || 20;
+      const curl = `curl -X POST "http://127.0.0.1:8004/generate?enable_cache=${currentInspectedData.cache_enabled !== false}&enable_semantic_cache=${currentInspectedData.semantic_cache_enabled !== false}&similarity_threshold=${currentInspectedData.similarity_threshold || 0.90}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"prompt": ${JSON.stringify(prompt)}, "max_new_tokens": ${maxToks}}'`;
+      navigator.clipboard.writeText(curl).then(() => alert('cURL command copied to clipboard!'));
+    }
+
+    function loadModalPromptToPlayground() {
+      if (!currentInspectedData) return;
+      const prompt = currentInspectedData.prompt || currentInspectedData.matched_prompt || '';
+      closeRequestModal();
+      switchView('playground');
+      setPrompt(prompt);
+      document.getElementById('prompt-input').focus();
+    }
+
+    // Modal click-outside & ESC handlers
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeRequestModal();
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const modal = document.getElementById('request-modal');
+      if (modal) {
+        modal.addEventListener('click', (e) => {
+          if (e.target === modal) closeRequestModal();
+        });
+      }
+
+      // Check URL hash e.g. #req-12345678
+      if (window.location.hash && window.location.hash.startsWith('#req-')) {
+        const reqId = window.location.hash.substring(1);
+        setTimeout(() => inspectRequest(reqId), 500);
+      }
+    });
+  </script>
+
+  <!-- Request Detail Inspector Modal Component -->
+  <div id="request-modal"
+    class="fixed inset-0 z-[100] hidden items-center justify-center p-4 bg-black/50 backdrop-blur-sm transition-opacity duration-200">
+    <div
+      class="glass-panel w-full max-w-2xl lg:max-w-3xl rounded-3xl p-6 md:p-7 flex flex-col gap-5 max-h-[90vh] overflow-hidden shadow-2xl border border-outline-variant/40 bg-surface/95 backdrop-blur-2xl">
+
+      <!-- Modal Header -->
+      <div class="flex justify-between items-start border-b border-outline-variant/30 pb-4">
+        <div class="flex flex-col gap-1.5">
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <span class="font-headline-md text-xl font-bold text-charcoal-text">Request Inspector</span>
+            <button id="modal-req-id-btn" onclick="copyModalReqId()" title="Click to copy Request ID"
+              class="inline-flex items-center gap-1.5 font-mono text-xs font-semibold px-2.5 py-1 rounded-lg bg-surface-container-high text-charcoal-text border border-outline-variant/50 hover:bg-surface-container-highest transition-colors cursor-pointer">
+              <span id="modal-req-id">req-00000000</span>
+              <span class="material-symbols-outlined text-[13px] opacity-60">content_copy</span>
+            </button>
+            <span id="modal-status-badge"></span>
+          </div>
+          <div class="flex items-center gap-3 text-xs text-on-surface-variant font-medium mt-0.5">
+            <span id="modal-timestamp" class="flex items-center gap-1">
+              <span class="material-symbols-outlined text-[14px]">schedule</span> 2026-09-09 00:00:00
+            </span>
+            <span>•</span>
+            <span id="modal-engine-info">Groq Qwen 2.5 27B</span>
+          </div>
+        </div>
+        <button onclick="closeRequestModal()"
+          class="w-8 h-8 rounded-full bg-surface-container hover:bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:text-charcoal-text transition-colors cursor-pointer">
+          <span class="material-symbols-outlined text-lg">close</span>
+        </button>
+      </div>
+
+      <!-- Modal Scrollable Content -->
+      <div class="flex-1 overflow-y-auto pr-1 flex flex-col gap-5 text-sm hide-scrollbar">
+
+        <!-- Prompt Section -->
+        <div class="flex flex-col gap-2">
+          <div class="flex justify-between items-center">
+            <label
+              class="font-label-md text-xs text-on-surface-variant uppercase tracking-wider font-semibold flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-[15px] text-sage-accent">edit_note</span> Prompt Input
+            </label>
+            <div class="flex items-center gap-3">
+              <button onclick="loadModalPromptToPlayground()"
+                class="text-xs font-semibold text-sage-accent hover:underline flex items-center gap-1 cursor-pointer">
+                <span class="material-symbols-outlined text-[14px]">play_arrow</span> Open in Playground
+              </button>
+              <span class="text-outline-variant">•</span>
+              <button onclick="copyModalPrompt()"
+                class="text-xs font-semibold text-on-surface-variant hover:text-charcoal-text flex items-center gap-1 cursor-pointer">
+                <span class="material-symbols-outlined text-[14px]">content_copy</span> Copy
+              </button>
+            </div>
+          </div>
+          <div id="modal-prompt"
+            class="p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/30 font-code-md text-xs md:text-sm text-charcoal-text whitespace-pre-wrap leading-relaxed">
+          </div>
+        </div>
+
+        <!-- Cache Match Banner (if cache hit) -->
+        <div id="modal-cache-banner" class="hidden p-4 rounded-2xl border text-xs flex flex-col gap-2">
+          <div class="flex items-center justify-between">
+            <div id="modal-cache-title" class="font-bold flex items-center gap-1.5"></div>
+            <span id="modal-cache-score" class="font-mono text-[11px] font-bold px-2.5 py-0.5 rounded-full"></span>
+          </div>
+          <div id="modal-matched-prompt"
+            class="font-mono text-on-surface-variant bg-surface/60 p-2.5 rounded-xl border border-outline-variant/20">
+          </div>
+        </div>
+
+        <!-- Output / Completion Section -->
+        <div class="flex flex-col gap-2">
+          <div class="flex justify-between items-center">
+            <label
+              class="font-label-md text-xs text-on-surface-variant uppercase tracking-wider font-semibold flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-[15px] text-terracotta-accent">smart_toy</span> Generated
+              Output / Completion
+            </label>
+            <button onclick="copyModalOutput()"
+              class="text-xs font-semibold text-on-surface-variant hover:text-charcoal-text flex items-center gap-1 cursor-pointer">
+              <span class="material-symbols-outlined text-[14px]">content_copy</span> Copy Output
+            </button>
+          </div>
+          <div id="modal-output"
+            class="p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/30 font-code-md text-xs md:text-sm text-charcoal-text whitespace-pre-wrap leading-relaxed min-h-[70px]">
+          </div>
+        </div>
+
+        <!-- Telemetry & Performance Metrics -->
+        <div>
+          <label
+            class="font-label-md text-xs text-on-surface-variant uppercase tracking-wider font-semibold block mb-2">Performance
+            & Tokens</label>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div
+              class="bg-surface-container-lowest border border-outline-variant/30 rounded-2xl p-3 flex flex-col items-center justify-center text-center">
+              <span id="modal-metric-latency" class="font-headline-md font-bold text-charcoal-text text-lg">0ms</span>
+              <span class="text-[10px] text-on-surface-variant uppercase tracking-wider mt-0.5">Total Latency</span>
+            </div>
+            <div
+              class="bg-surface-container-lowest border border-outline-variant/30 rounded-2xl p-3 flex flex-col items-center justify-center text-center">
+              <span id="modal-metric-compute" class="font-headline-md font-bold text-charcoal-text text-lg">0ms</span>
+              <span class="text-[10px] text-on-surface-variant uppercase tracking-wider mt-0.5">Inference Proc</span>
+            </div>
+            <div
+              class="bg-surface-container-lowest border border-outline-variant/30 rounded-2xl p-3 flex flex-col items-center justify-center text-center">
+              <span id="modal-metric-queue" class="font-headline-md font-bold text-charcoal-text text-lg">0ms</span>
+              <span class="text-[10px] text-on-surface-variant uppercase tracking-wider mt-0.5">Queue Wait</span>
+            </div>
+            <div
+              class="bg-surface-container-lowest border border-outline-variant/30 rounded-2xl p-3 flex flex-col items-center justify-center text-center">
+              <span id="modal-metric-tokens" class="font-headline-md font-bold text-charcoal-text text-lg">0 / 0</span>
+              <span class="text-[10px] text-on-surface-variant uppercase tracking-wider mt-0.5">Prompt / Gen
+                Tokens</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Engine & Pipeline Configuration -->
+        <div class="bg-surface-container-low rounded-2xl p-4 border border-outline-variant/30">
+          <label
+            class="font-label-md text-xs text-on-surface-variant uppercase tracking-wider font-semibold block mb-2">Routing
+            & Pipeline Parameters</label>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+            <div>
+              <span class="text-on-surface-variant text-[11px] block">Execution Pipeline:</span>
+              <span id="modal-cfg-pipeline" class="font-semibold text-charcoal-text">Direct (No Queue)</span>
+            </div>
+            <div>
+              <span class="text-on-surface-variant text-[11px] block">Exact Cache:</span>
+              <span id="modal-cfg-cache" class="font-semibold text-charcoal-text">Enabled</span>
+            </div>
+            <div>
+              <span class="text-on-surface-variant text-[11px] block">Semantic Cache:</span>
+              <span id="modal-cfg-semantic" class="font-semibold text-charcoal-text">Enabled</span>
+            </div>
+            <div>
+              <span class="text-on-surface-variant text-[11px] block">Cosine Threshold:</span>
+              <span id="modal-cfg-thresh" class="font-mono font-semibold text-tertiary">0.90</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Raw JSON Telemetry Details (Collapsible) -->
+        <details class="bg-surface-container-lowest border border-outline-variant/30 rounded-2xl p-3 text-xs group">
+          <summary
+            class="font-label-md font-semibold text-on-surface-variant cursor-pointer hover:text-charcoal-text flex items-center justify-between">
+            <span class="flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-[14px]">data_object</span> Raw JSON Telemetry Payload
+            </span>
+            <button type="button" onclick="event.stopPropagation(); copyModalRawJson();"
+              class="text-sage-accent text-[11px] hover:underline font-semibold cursor-pointer">Copy JSON</button>
+          </summary>
+          <pre id="modal-raw-json"
+            class="mt-3 p-3 bg-surface-container rounded-xl font-mono text-[11px] overflow-x-auto text-on-surface"></pre>
+        </details>
+
+      </div>
+
+      <!-- Modal Footer Actions -->
+      <div class="flex justify-between items-center pt-3 border-t border-outline-variant/30 text-xs">
+        <button onclick="copyCurlForRequest()"
+          class="px-4 py-2 rounded-full bg-surface-container hover:bg-surface-container-high text-charcoal-text border border-outline-variant/40 font-semibold flex items-center gap-1.5 transition-colors cursor-pointer">
+          <span class="material-symbols-outlined text-[15px]">terminal</span> Copy cURL
+        </button>
+        <button onclick="closeRequestModal()"
+          class="px-5 py-2 rounded-full bg-charcoal-text hover:bg-terracotta-accent text-white font-semibold transition-colors cursor-pointer">
+          Done
+        </button>
+      </div>
+    </div>
+  </div>
+</body>
+
+</html>

@@ -1,0 +1,7 @@
+# Put your prompts here, one per line.
+# Lines starting with '#' or empty lines will be ignored.
+# When you run `python run_semantic_prompts.py`, all prompts below will be sent simultaneously.
+
+How big is sun?
+What is sun's size?
+How large is sun?
