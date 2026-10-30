@@ -969,8 +969,18 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ prompt: rawInput, max_new_tokens: maxTokens })
         });
+        if (!res.ok) {
+          const errText = await res.text();
+          let msg = `Server returned ${res.status}`;
+          try {
+            const errJson = JSON.parse(errText);
+            msg = errJson.detail || msg;
+          } catch (_) {
+            if (errText && errText.length < 200) msg = errText;
+          }
+          throw new Error(msg);
+        }
         const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Execution error');
 
         updateSingleUI(data);
         fetchStatus();

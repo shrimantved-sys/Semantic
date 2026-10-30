@@ -11,6 +11,7 @@ import uuid
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 import httpx
 from pydantic import BaseModel, Field
@@ -298,6 +299,14 @@ app = FastAPI(
     title="LLM Inference Server - Two-Tier Cache Architecture",
     description="Inference server with Tier 1 exact match cache and Tier 2 semantic embedding cache.",
     lifespan=lifespan
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -808,4 +817,5 @@ async def generate(
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8004)
+    port = int(os.environ.get("PORT", "8004"))
+    uvicorn.run(app, host="0.0.0.0", port=port)
